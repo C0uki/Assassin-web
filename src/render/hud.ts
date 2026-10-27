@@ -1,0 +1,164 @@
+import { VIEW_H, VIEW_W } from '../core/camera';
+import { TOTAL_DOCS } from '../systems/progress';
+import { GROUND_ROW } from '../world/city';
+import type { World } from '../world/world';
+
+export const FONT = "'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',sans-serif";
+
+const MAP_X = 180;
+const MAP_W = 600;
+const MAP_Y = 10;
+const MAP_H = 22;
+
+let skyline: { x: number; w: number; h: number }[] | null = null;
+
+export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: { muted: boolean }): void {
+  const p = w.player;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  // HP
+  const maxHp = w.playerStats.maxHp;
+  for (let i = 0; i < maxHp; i++) {
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(14 + i * 13, 12, 11, 14);
+    ctx.fillStyle = i < p.hp ? (p.hp <= 3 ? '#ff5040' : '#e8e0cc') : 'rgba(80,60,60,0.6)';
+    ctx.fillRect(16 + i * 13, 14, 7, 10);
+  }
+  ctx.font = `12px ${FONT}`;
+  ctx.fillStyle = '#e8e0cc';
+  ctx.fillText(`ナイフ ${p.knives}/${w.playerStats.maxKnives}   煙玉 ${p.smokes}/${w.playerStats.maxSmokes}`, 14, 44);
+  ctx.fillText(`文書 ${w.save.docs.length}/${TOTAL_DOCS}   標的 ${w.save.targetsKilled.length}/${w.city.targets.length}`, 14, 60);
+
+  drawMinimap(ctx, w);
+
+  // status
+  ctx.textAlign = 'right';
+  ctx.font = `bold 13px ${FONT}`;
+  if (w.combatActive) {
+    ctx.fillStyle = '#ff5a40';
+    ctx.fillText('発見されている', VIEW_W - 14, 26);
+  } else if (w.guards.some((g) => g.alive && (g.state === 'search' || g.state === 'suspicious') && Math.abs(g.cx - p.cx) < 900)) {
+    ctx.fillStyle = '#ffc040';
+    ctx.fillText('警戒されている', VIEW_W - 14, 26);
+  } else if (p.hidden || p.blended) {
+    ctx.fillStyle = '#9fd0ff';
+    ctx.fillText(p.hidden ? '隠れている' : '群衆に紛れている', VIEW_W - 14, 26);
+  }
+  if (w.isAlert(w.district)) {
+    ctx.fillStyle = '#e0a060';
+    ctx.font = `11px ${FONT}`;
+    ctx.fillText('地区警戒中', VIEW_W - 14, 42);
+  }
+  if (extra.muted) {
+    ctx.fillStyle = '#aaa';
+    ctx.font = `11px ${FONT}`;
+    ctx.fillText('ミュート (M)', VIEW_W - 14, 58);
+  }
+
+  // messages
+  ctx.textAlign = 'center';
+  ctx.font = `bold 16px ${FONT}`;
+  w.messages.forEach((m, i) => {
+    ctx.globalAlpha = Math.min(1, m.t * 2);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    const tw = ctx.measureText(m.text).width + 24;
+    ctx.fillRect(VIEW_W / 2 - tw / 2, 50 + i * 28, tw, 24);
+    ctx.fillStyle = m.color;
+    ctx.fillText(m.text, VIEW_W / 2, 68 + i * 28);
+  });
+  ctx.globalAlpha = 1;
+
+  // district banner
+  if (w.bannerT > 0) {
+    const d = w.city.districts[w.district];
+    ctx.globalAlpha = Math.min(1, w.bannerT, (3.5 - w.bannerT) * 3);
+    ctx.font = `bold 34px ${FONT}`;
+    ctx.fillStyle = '#f6ecd6';
+    ctx.fillText(d.name, VIEW_W / 2, 190);
+    ctx.font = `15px ${FONT}`;
+    ctx.fillStyle = '#d8c8a8';
+    ctx.fillText(`— ${d.sub} —`, VIEW_W / 2, 216);
+    ctx.globalAlpha = 1;
+  }
+
+  // controls hint
+  ctx.textAlign = 'left';
+  ctx.font = `11px ${FONT}`;
+  ctx.fillStyle = 'rgba(240,230,210,0.6)';
+  ctx.fillText(
+    'A/D 移動  Shift フリーラン  W/S 登る/降りる  Space ジャンプ  J 攻撃・暗殺  K 防御(パリィ)  L 回避  I ナイフ  O 煙玉  E 鷹の目  F 隠れる  Esc ポーズ',
+    14,
+    VIEW_H - 12,
+  );
+
+  // death overlay
+  if (w.playerDeadT >= 0) {
+    const a = Math.min(1, w.playerDeadT / 1.2);
+    ctx.fillStyle = `rgba(40,0,0,${0.6 * a})`;
+    ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+    ctx.globalAlpha = a;
+    ctx.textAlign = 'center';
+    ctx.font = `bold 40px ${FONT}`;
+    ctx.fillStyle = '#ffdddd';
+    ctx.fillText('力尽きた……', VIEW_W / 2, VIEW_H / 2 - 10);
+    ctx.font = `15px ${FONT}`;
+    ctx.fillText('最後に訪れた隠れ家で目を覚ます', VIEW_W / 2, VIEW_H / 2 + 24);
+    ctx.globalAlpha = 1;
+  }
+}
+
+function drawMinimap(ctx: CanvasRenderingContext2D, w: World): void {
+  const worldW = w.map.widthPx;
+  const sx = MAP_W / worldW;
+  if (!skyline) {
+    skyline = w.city.buildings.map((b) => ({ x: b.tx * 32 * sx, w: Math.max(1, b.tw * 32 * sx), h: ((GROUND_ROW - b.topTy) / 24) * (MAP_H - 6) }));
+  }
+  ctx.fillStyle = 'rgba(10,8,12,0.55)';
+  ctx.fillRect(MAP_X - 4, MAP_Y - 2, MAP_W + 8, MAP_H + 4);
+  const colors = ['rgba(150,110,80,0.35)', 'rgba(200,150,90,0.35)', 'rgba(220,210,190,0.35)'];
+  w.city.districts.forEach((d, i) => {
+    ctx.fillStyle = colors[i];
+    ctx.fillRect(MAP_X + d.x0 * sx, MAP_Y, (d.x1 - d.x0) * sx, MAP_H);
+  });
+  ctx.fillStyle = 'rgba(30,22,26,0.8)';
+  for (const s of skyline) ctx.fillRect(MAP_X + s.x, MAP_Y + MAP_H - s.h, s.w, s.h);
+  const yOf = (y: number): number => MAP_Y + MAP_H - Math.max(0, Math.min(MAP_H, ((w.map.heightPx - 160 - y) / (24 * 32)) * (MAP_H - 6)));
+
+  for (const h of w.hideouts) {
+    if (!h.found) continue;
+    ctx.fillStyle = '#c03030';
+    ctx.fillRect(MAP_X + (h.x + 32) * sx - 2, MAP_Y + MAP_H - 6, 4, 6);
+  }
+  for (const g of w.guards) {
+    if (!g.alive) continue;
+    const x = MAP_X + g.cx * sx;
+    if (g.kind === 'target') {
+      const y = yOf(g.feet) - 3;
+      ctx.fillStyle = '#ffd24a';
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4);
+      ctx.lineTo(x + 4, y);
+      ctx.lineTo(x, y + 4);
+      ctx.lineTo(x - 4, y);
+      ctx.closePath();
+      ctx.fill();
+    } else if (g.state === 'combat') {
+      ctx.fillStyle = '#ff3a2a';
+      ctx.fillRect(x - 1.5, yOf(g.feet) - 3, 3, 3);
+    }
+  }
+  if (w.eagleVision) {
+    ctx.fillStyle = '#7cc4ff';
+    for (const d of w.docs) ctx.fillRect(MAP_X + d.x * sx - 1, yOf(d.y + 18) - 3, 2, 2);
+  }
+  const px = MAP_X + w.player.cx * sx;
+  const py = yOf(w.player.feet);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(px, py - 8);
+  ctx.lineTo(px + 4, py);
+  ctx.lineTo(px - 4, py);
+  ctx.closePath();
+  ctx.fill();
+}
