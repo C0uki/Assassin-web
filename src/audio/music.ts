@@ -23,6 +23,7 @@ export class Music {
   private next = 0;
   private step = 0;
   private drone: { stop(): void } | null = null;
+  private trackCache: Record<Exclude<MusicMode, 'none'>, Track> | null = null;
 
   constructor(
     private synth: Synth,
@@ -108,7 +109,8 @@ export class Music {
 
   update(): void {
     if (this.mode === 'none') return;
-    const track = this.tracks()[this.mode];
+    this.trackCache ??= this.tracks();
+    const track = this.trackCache[this.mode];
     const now = this.synth.ctx.currentTime;
     if (this.next < now - 0.5) this.next = now + 0.05;
     while (this.next < now + 0.15) {
