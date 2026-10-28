@@ -9,6 +9,7 @@ import type { World } from '../world/world';
 import { Background } from './background';
 import { drawEagleVision } from './eagleVision';
 import {
+  DogPose,
   FigureStyle,
   Pose,
   airPose,
@@ -18,6 +19,7 @@ import {
   deadPose,
   divePose,
   drinkPose,
+  drawDog,
   drawFigure,
   guardPose,
   hurtPose,
@@ -89,6 +91,8 @@ export function guardStyle(g: Guard): FigureStyle {
   };
   if (g.kind === 'elite') Object.assign(base, { robe: '#3a3f58', headColor: '#c0c6cc', shield: true, cape: true, scale: 1.1, weapon: 'sword' });
   if (g.kind === 'archer') Object.assign(base, { robe: '#5a4a2a', trim: '#7a2a22', head: 'hat', headColor: '#4a3a1a', weapon: 'bow' });
+  if (g.kind === 'chaser') Object.assign(base, { robe: '#2f4a46', trim: '#b8b0a0', head: 'veil', headColor: '#22332f', weapon: 'blade', cape: false });
+  if (g.kind === 'brute') Object.assign(base, { robe: '#3a3a40', trim: '#7a2a22', headColor: '#6a6e74', weapon: 'sword', shield: true, scale: 1.25 });
   if (g.kind === 'target') {
     Object.assign(base, { trim: '#e8c050', cape: true, weapon: combat ? 'sword' : 'none' }, TARGET_LOOKS[g.targetId ?? ''] ?? {});
   }
@@ -109,6 +113,36 @@ export function guardPoseFor(g: Guard): Pose {
   if (vx > 5) return walkPose(g.animT * 7);
   if (g.state === 'search' && !g.lastKnown) return searchPose(g.animT);
   return idlePose(g.animT);
+}
+
+export function dogPose(g: Guard): DogPose {
+  return {
+    run: g.animT * (Math.abs(g.body.vx) > 120 ? 16 : 9),
+    speed: Math.abs(g.body.vx),
+    sniff: g.sniffT > 0 || (g.state === 'search' && !g.lastKnown),
+    lunge: g.attack.phase === 'active' || g.attack.phase === 'windup',
+    dead: g.state === 'dead',
+  };
+}
+
+/** Draw a guard or hound, optionally as a flat silhouette for eagle vision. */
+export function drawGuard(ctx: CanvasRenderingContext2D, g: Guard, flat?: string): void {
+  if (g.kind === 'dog') drawDog(ctx, g.cx, g.feet, g.facing, dogPose(g), flat ?? (g.hurtT > 0 ? '#c8a090' : undefined));
+  else drawFigure(ctx, g.cx, g.feet, g.facing, guardPoseFor(g), flat ? { ...guardStyle(g), flat } : guardStyle(g));
+}
+
+function drawLeash(ctx: CanvasRenderingContext2D, h: Guard, dog: Guard): void {
+  if (Math.abs(h.cx - dog.cx) > 90 || Math.abs(h.feet - dog.feet) > 10) return;
+  const hx = h.cx - h.facing * 4;
+  const hy = h.feet - 20;
+  const dx = dog.cx + dog.facing * 8;
+  const dy = dog.feet - 14;
+  ctx.strokeStyle = 'rgba(60,40,25,0.9)';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(hx, hy);
+  ctx.quadraticCurveTo((hx + dx) / 2, Math.max(hy, dy) + 8, dx, dy);
+  ctx.stroke();
 }
 
 export function civStyle(c: Civilian): FigureStyle {
@@ -249,7 +283,8 @@ export class Renderer {
     for (const g of w.guards) {
       if (g.cx < x0 || g.cx > x1) continue;
       if (g.state === 'dead' && g.deadT > 0 && this.hiddenInHay(w, g)) continue;
-      drawFigure(ctx, g.cx, g.feet, g.facing, guardPoseFor(g), guardStyle(g));
+      if (g.dog?.alive && g.alive) drawLeash(ctx, g, g.dog);
+      drawGuard(ctx, g);
       this.drawTelegraph(ctx, g);
     }
     const p = w.player;

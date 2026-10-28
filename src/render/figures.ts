@@ -562,3 +562,87 @@ export function mix(a: string, b: string, t: number): string {
   const ch = (shift: number): number => Math.round(((pa >> shift) & 255) * (1 - t) + ((pb >> shift) & 255) * t);
   return `#${((1 << 24) | (ch(16) << 16) | (ch(8) << 8) | ch(0)).toString(16).slice(1)}`;
 }
+
+export interface DogPose {
+  /** Gait phase; 0 when standing. */
+  run: number;
+  speed: number;
+  /** Head down sniffing. */
+  sniff: boolean;
+  lunge: boolean;
+  dead: boolean;
+}
+
+/** A lean hound in profile, drawn facing right then mirrored. */
+export function drawDog(ctx: CanvasRenderingContext2D, x: number, footY: number, facing: number, p: DogPose, flat?: string): void {
+  const body = flat ?? '#4a3426';
+  const dark = flat ?? '#2a1c14';
+  ctx.save();
+  ctx.translate(x, footY);
+  ctx.scale(facing, 1);
+  if (p.dead) {
+    ctx.translate(0, -4);
+    ctx.rotate(Math.PI / 2 - 0.05);
+    ctx.translate(0, -8);
+  }
+  ctx.lineCap = 'round';
+  const legY = -9;
+  const swing = (o: number): number => (p.speed > 5 ? Math.sin(p.run + o) * (p.speed > 120 ? 6 : 3.5) : 0);
+  ctx.strokeStyle = dark;
+  ctx.lineWidth = 3;
+  for (const [hx, o] of [
+    [-8, 0],
+    [-6, Math.PI],
+    [7, Math.PI / 2],
+    [9, Math.PI * 1.5],
+  ] as const) {
+    ctx.beginPath();
+    ctx.moveTo(hx, legY);
+    ctx.lineTo(hx + swing(o), 0);
+    ctx.stroke();
+  }
+  // tail
+  ctx.lineWidth = 2.5;
+  ctx.beginPath();
+  ctx.moveTo(-11, legY - 4);
+  ctx.quadraticCurveTo(-17, legY - 10 - (p.speed > 5 ? 2 : 0), -19, legY - 6 + Math.sin(p.run * 2) * 2);
+  ctx.stroke();
+  // body
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, legY - 3, 12, 5.5, p.lunge ? -0.15 : 0, 0, Math.PI * 2);
+  ctx.fill();
+  // neck + head
+  const hy = p.sniff ? legY + 2 : p.lunge ? legY - 8 : legY - 9;
+  const hx = p.lunge ? 17 : 13;
+  ctx.beginPath();
+  ctx.moveTo(8, legY - 6);
+  ctx.lineTo(hx - 2, hy - 2);
+  ctx.lineTo(hx - 2, hy + 4);
+  ctx.lineTo(8, legY);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.ellipse(hx, hy, 5, 3.6, 0.15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = dark;
+  ctx.beginPath();
+  ctx.moveTo(hx + 3, hy - 1);
+  ctx.lineTo(hx + 9, hy + 1);
+  ctx.lineTo(hx + 3, hy + 3);
+  ctx.closePath();
+  ctx.fill();
+  // ear
+  ctx.beginPath();
+  ctx.moveTo(hx - 3, hy - 3);
+  ctx.lineTo(hx - 1, hy - 8);
+  ctx.lineTo(hx + 1, hy - 3);
+  ctx.closePath();
+  ctx.fill();
+  // collar
+  if (!flat) {
+    ctx.fillStyle = '#a03030';
+    ctx.fillRect(hx - 5, hy + 1, 3, 4);
+  }
+  ctx.restore();
+}

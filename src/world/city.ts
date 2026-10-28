@@ -8,7 +8,7 @@ export const GROUND_ROW = 35;
 export const GROUND_Y = GROUND_ROW * TILE;
 
 export type BuildingKind = 'house' | 'tower' | 'warehouse' | 'manor' | 'cathedral' | 'hideout' | 'wall';
-export type GuardKind = 'guard' | 'elite' | 'archer' | 'target';
+export type GuardKind = 'guard' | 'elite' | 'archer' | 'target' | 'chaser' | 'brute' | 'dog';
 
 export interface Building {
   tx: number;
@@ -37,6 +37,8 @@ export interface GuardSpawn {
   facing: 1 | -1;
   district: number;
   targetId?: string;
+  /** Comes with a hound that walks at its heels. */
+  withDog?: boolean;
 }
 
 export interface TargetDef {
@@ -306,7 +308,7 @@ export function buildCity(seed = 1337): CityDef {
     guard('target', 456 * TILE, GROUND_Y, r, 2, 1, 't5');
     guard('elite', 450 * TILE, GROUND_Y, r, 2, 1);
     guard('elite', 462 * TILE, GROUND_Y, r, 2, -1);
-    guard('guard', 445 * TILE, GROUND_Y, [445 * TILE, 445 * TILE], 2, 1);
+    guard('brute', 445 * TILE, GROUND_Y, [445 * TILE, 445 * TILE], 2, 1);
     guard('archer', 455 * TILE, (GROUND_ROW - 8) * TILE, [443 * TILE, 468 * TILE], 2, 1);
   });
 
@@ -319,6 +321,7 @@ export function buildCity(seed = 1337): CityDef {
     const r = onRoof(c);
     guard('target', r.cx, r.y, r.range, 2, -1, 't6');
     guard('elite', r.cx - 3 * TILE, r.y, r.range, 2, 1);
+    guard('chaser', r.cx + 3 * TILE, r.y, r.range, 2, -1);
     guard('archer', (515 * TILE), roofY(GROUND_ROW - 9), [514 * TILE, 516 * TILE], 2, 1);
     guard('archer', (536 * TILE), roofY(GROUND_ROW - 10), [535 * TILE, 537 * TILE], 2, -1);
   });
@@ -397,8 +400,37 @@ export function buildCity(seed = 1337): CityDef {
     }
   });
 
+  assignSpecialists(city);
   placePickups(city, fillers);
   return city;
+}
+
+/** Hound handlers, chasers and brutes per district: more of them the further in you go. */
+export const SPECIALISTS: { dogs: number; chasers: number; brutes: number }[] = [
+  { dogs: 2, chasers: 0, brutes: 0 },
+  { dogs: 2, chasers: 2, brutes: 1 },
+  { dogs: 2, chasers: 3, brutes: 3 },
+];
+
+/**
+ * Turn some street patrols into specialists. Runs after the layout with its own RNG,
+ * so buildings, documents and patrol routes are the same as before.
+ */
+function assignSpecialists(city: CityDef): void {
+  const rng = new Rng(31);
+  SPECIALISTS.forEach((want, d) => {
+    const pool = city.guards.filter(
+      (g) => g.district === d && !g.targetId && g.y === GROUND_Y && g.minX !== g.maxX && (g.kind === 'guard' || g.kind === 'elite'),
+    );
+    const take = (): GuardSpawn | undefined => pool.splice(rng.int(0, pool.length - 1), 1)[0];
+    for (let i = 0; i < want.dogs && pool.length; i++) {
+      const g = take()!;
+      g.kind = 'guard';
+      g.withDog = true;
+    }
+    for (let i = 0; i < want.chasers && pool.length; i++) take()!.kind = 'chaser';
+    for (let i = 0; i < want.brutes && pool.length; i++) take()!.kind = 'brute';
+  });
 }
 
 /** Food along the streets and potions on rooftops. Uses its own RNG so the rest of the city stays put. */

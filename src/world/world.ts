@@ -23,7 +23,7 @@ import { CityDef, GROUND_Y, HideoutDef, PickupKind, districtAt } from './city';
 import { lineOfSight } from './los';
 import { TileMap } from './tilemap';
 
-export type NoiseKind = 'step' | 'land' | 'clash' | 'shout' | 'alarm' | 'scream';
+export type NoiseKind = 'step' | 'land' | 'clash' | 'shout' | 'alarm' | 'scream' | 'bark';
 
 export interface Noise {
   x: number;
@@ -134,7 +134,19 @@ export class World {
 
   spawnEntities(): void {
     const killed = new Set(this.save.targetsKilled);
-    this.guards = this.city.guards.filter((s) => !s.targetId || !killed.has(s.targetId)).map((s) => new Guard(s.kind, s));
+    this.guards = [];
+    for (const s of this.city.guards) {
+      if (s.targetId && killed.has(s.targetId)) continue;
+      const g = new Guard(s.kind, s);
+      this.guards.push(g);
+      if (s.withDog) {
+        const x = s.x - s.facing * 30;
+        const dog = new Guard('dog', { x, y: s.y, minX: x, maxX: x, facing: s.facing, district: s.district });
+        dog.handler = g;
+        g.dog = dog;
+        this.guards.push(dog);
+      }
+    }
     const rng = new Rng(4242);
     this.groups = [];
     this.civilians = [];
@@ -495,7 +507,7 @@ export class World {
           const b = g.body;
           if (pr.x > b.x - 4 && pr.x < b.x + b.w + 4 && pr.y > b.y && pr.y < b.y + b.h) {
             pr.dead = true;
-            const dmg = g.kind === 'elite' ? 3 : 5;
+            const dmg = g.kind === 'elite' || g.kind === 'brute' ? 3 : 5;
             if (g.hp <= dmg) this.killGuard(g, 'knife');
             else {
               g.hp -= dmg;

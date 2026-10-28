@@ -2,7 +2,7 @@ import { Camera, VIEW_H, VIEW_W } from '../core/camera';
 import { TILE } from '../world/tilemap';
 import type { World } from '../world/world';
 import { drawFigure } from './figures';
-import { civPose, civStyle, guardPoseFor, guardStyle, playerPose, playerStyle } from './renderer';
+import { civPose, civStyle, drawGuard, playerPose, playerStyle } from './renderer';
 
 const glow = (ctx: CanvasRenderingContext2D, color: string, blur: number): void => {
   ctx.shadowColor = color;
@@ -55,7 +55,7 @@ export function drawEagleVision(ctx: CanvasRenderingContext2D, w: World, cam: Ca
     if (g.cx < x0 || g.cx > x1 || !g.alive) continue;
     const target = g.kind === 'target';
     glow(ctx, target ? '#ffcc33' : '#ff2a1a', target ? 22 : 12);
-    drawFigure(ctx, g.cx, g.feet, g.facing, guardPoseFor(g), { ...guardStyle(g), flat: target ? '#ffd24a' : '#d02a20' });
+    drawGuard(ctx, g, target ? '#ffd24a' : '#d02a20');
   }
   const p = w.player;
   if (!p.hidden) {

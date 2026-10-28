@@ -150,6 +150,16 @@ export class Synth {
       case 'eat':
         this.noise(0.06, { freq: 1800, type: 'bandpass', vol: 0.08 });
         return this.tone(660, 0.2, { vol: 0.05, at: t + 0.08 });
+      case 'bark':
+        this.tone(420, 0.09, { to: 260, type: 'sawtooth', vol: 0.1 });
+        this.noise(0.07, { freq: 900, type: 'bandpass', q: 2, vol: 0.1 });
+        this.tone(440, 0.09, { to: 270, type: 'sawtooth', vol: 0.1, at: t + 0.16 });
+        return this.noise(0.07, { freq: 900, type: 'bandpass', q: 2, vol: 0.1, at: t + 0.16 });
+      case 'growl':
+        return this.tone(90, 0.3, { to: 70, type: 'sawtooth', vol: 0.06 });
+      case 'bite':
+        this.noise(0.05, { freq: 2200, type: 'bandpass', vol: 0.12 });
+        return this.tone(300, 0.06, { type: 'square', vol: 0.05 });
       case 'menu':
         return this.tone(660, 0.08, { type: 'triangle', vol: 0.06 });
     }
