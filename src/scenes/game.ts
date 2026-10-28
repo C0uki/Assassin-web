@@ -3,10 +3,10 @@ import { FONT } from '../render/hud';
 import { Renderer } from '../render/renderer';
 import { loadSave, newSave } from '../systems/progress';
 import { Tutorial } from '../systems/tutorial';
-import { buildCity, buildTrainingGround } from '../world/city';
+import { buildArena, buildCity, buildTrainingGround } from '../world/city';
 import { World, WorldMode } from '../world/world';
+import { EndingScene } from './ending';
 import { Menu, drawControls } from './menu';
-import { ResultScene } from './result';
 import type { AppContext, Scene } from './scene';
 import { SettingsPanel } from './settings';
 import { TitleScene } from './title';
@@ -28,6 +28,8 @@ export class GameScene implements Scene {
   private settings: SettingsPanel;
   private readonly mode: WorldMode;
   private readonly after: 'campaign' | 'title';
+  /** Shown after falling to the grand master. */
+  private defeatMenu: Menu | null = null;
 
   constructor(
     private app: AppContext,
@@ -36,8 +38,9 @@ export class GameScene implements Scene {
     this.mode = opts.mode ?? 'campaign';
     this.after = opts.after ?? 'campaign';
     const training = this.mode === 'training';
-    const city = training ? buildTrainingGround() : buildCity();
+    const city = training ? buildTrainingGround() : this.mode === 'boss' ? buildArena() : buildCity();
     const save = training ? newSave() : (loadSave(app.storage) ?? newSave());
+    if (this.mode === 'boss') save.stats.bossAttempts++;
     this.world = new World(city, save, training ? null : app.storage, this.mode);
     if (training) this.tutorial = new Tutorial(this.world);
     this.camera = new Camera(city.map.widthPx, city.map.heightPx);
@@ -53,6 +56,19 @@ export class GameScene implements Scene {
     this.app.settings.tutorialDone = true;
     this.app.saveSettings();
     this.app.go(this.after === 'campaign' ? new GameScene(this.app) : new TitleScene(this.app));
+  }
+
+  private updateDefeat(menu: Menu): void {
+    const c = menu.update(this.app.input, () => this.app.audio.play('menu'));
+    if (c === null) return;
+    this.app.audio.play('menu');
+    if (menu.items[c] === 'もう一度挑む') return this.app.go(new GameScene(this.app, { mode: 'boss' }));
+    // Back in town at the easternmost hideout, right by the gate.
+    const s = this.world.save;
+    s.hideout = 2;
+    if (!s.hideoutsFound.includes(2)) s.hideoutsFound.push(2);
+    this.world.persist();
+    this.app.go(new GameScene(this.app));
   }
 
   private updatePause(): void {
@@ -84,6 +100,11 @@ export class GameScene implements Scene {
     const w = this.world;
     if (input.wasPressed('mute')) this.app.audio.toggleMute();
     if (this.paused) return this.updatePause();
+    if (this.defeatMenu) {
+      w.update(input, dt);
+      w.sounds.length = 0;
+      return this.updateDefeat(this.defeatMenu);
+    }
     if (input.wasPressed('pause')) {
       this.paused = true;
       this.pauseMenu.index = 0;
@@ -95,20 +116,34 @@ export class GameScene implements Scene {
     this.tutorial?.update(dt);
     for (const s of w.sounds) this.app.audio.play(s);
     w.sounds.length = 0;
-    this.app.audio.setMusic(w.combatActive ? 'combat' : 'explore');
+    if (w.boss && w.victoryT < 0) this.app.audio.setMusic('boss', [1, 1.1, 1.22][w.boss.phase - 1]);
+    else this.app.audio.setMusic(w.combatActive && w.victoryT < 0 ? 'combat' : 'explore');
+    if (w.enterBossRequested) {
+      w.persist();
+      return this.app.go(new GameScene(this.app, { mode: 'boss' }));
+    }
 
     const p = w.player;
     this.camera.follow(p.cx, p.cy, p.facing, dt);
-    if (w.playerDeadT > 2.8) {
+    if (w.playerDeadT > 2.2 && this.mode === 'boss') {
+      this.defeatMenu = new Menu(['もう一度挑む', '街へ戻る']);
+      w.persist();
+    } else if (w.playerDeadT > 2.8) {
       w.respawn();
       this.camera.snap(w.player.cx, w.player.cy);
     }
     if (this.tutorial && this.tutorial.finishedT > 3) this.finishTraining();
-    else if (w.victoryT > 2.5) this.app.go(new ResultScene(this.app, w.save));
+    else if (w.victoryT > 3) this.app.go(new EndingScene(this.app, w.save));
   }
 
   render(ctx: CanvasRenderingContext2D): void {
     this.renderer.draw(ctx, this.world, this.camera, { muted: this.app.audio.muted, tutorial: this.tutorial });
+    if (this.defeatMenu) {
+      ctx.fillStyle = 'rgba(20,0,0,0.5)';
+      ctx.fillRect(0, VIEW_H / 2 + 40, VIEW_W, 110);
+      this.defeatMenu.draw(ctx, VIEW_W / 2, VIEW_H / 2 + 82);
+      return;
+    }
     if (!this.paused) return;
     if (this.settings.open) return this.settings.draw(ctx);
     ctx.fillStyle = 'rgba(8,6,10,0.72)';

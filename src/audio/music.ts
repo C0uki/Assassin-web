@@ -1,6 +1,6 @@
 import type { Synth } from './sfx';
 
-export type MusicMode = 'none' | 'explore' | 'combat';
+export type MusicMode = 'none' | 'explore' | 'combat' | 'boss';
 
 // D "Hijaz" scale: D Eb F# G A Bb C D
 const SCALE = [0, 1, 4, 5, 7, 8, 10, 12, 13, 16];
@@ -11,6 +11,8 @@ const freq = (deg: number, oct = 0): number => ROOT * Math.pow(2, (SCALE[((deg %
 const EXPLORE_MELODY = [4, -1, 5, 4, 2, -1, 1, 2, 4, -1, -1, 2, 1, 0, -1, -1, 3, -1, 4, 5, 6, -1, 5, 4, 2, 4, 2, 1, 0, -1, -1, -1];
 const COMBAT_BASS = [0, 0, -1, 0, 1, -1, 0, -1, 0, 0, -1, 0, 3, -1, 1, -1];
 const COMBAT_LEAD = [7, -1, 6, 7, -1, 5, -1, 4, 7, -1, 8, 7, 6, 5, 4, 2];
+const BOSS_BASS = [0, -1, 0, 0, 1, -1, 1, 0, 0, -1, 0, 0, 5, -1, 4, 1];
+const BOSS_LEAD = [7, 8, 7, -1, 5, -1, 4, 5, 7, -1, 9, 8, 7, -1, 5, 4];
 
 interface Track {
   stepDur: number;
@@ -24,6 +26,8 @@ export class Music {
   private step = 0;
   private drone: { stop(): void } | null = null;
   private trackCache: Record<Exclude<MusicMode, 'none'>, Track> | null = null;
+  /** Speeds the current track up (the duel gets faster each phase). */
+  tempo = 1;
 
   constructor(
     private synth: Synth,
@@ -66,6 +70,18 @@ export class Music {
           if ([3, 6, 10, 12, 14].includes(st)) drum(at, false);
         },
       },
+      boss: {
+        stepDur: 60 / 120 / 2,
+        steps: 16,
+        play: (st, at) => {
+          const b = BOSS_BASS[st];
+          if (b >= 0) s.tone(freq(b, -2), 0.3, { type: 'sawtooth', vol: 0.07, at, dest: out });
+          const l = BOSS_LEAD[st];
+          if (l >= 0) pluck(freq(l, 0), at, 0.035, 0.22);
+          if (st % 4 === 0) drum(at, true);
+          if (st % 4 === 2 || st === 15) drum(at, false);
+        },
+      },
     };
   }
 
@@ -76,7 +92,7 @@ export class Music {
     this.next = this.synth.ctx.currentTime + 0.05;
     this.drone?.stop();
     this.drone = null;
-    if (mode !== 'none') this.drone = this.startDrone(mode === 'combat' ? 0.025 : 0.035);
+    if (mode !== 'none') this.drone = this.startDrone(mode === 'explore' ? 0.035 : 0.025);
   }
 
   private startDrone(vol: number): { stop(): void } {
@@ -116,7 +132,7 @@ export class Music {
     while (this.next < now + 0.15) {
       track.play(this.step, this.next);
       this.step = (this.step + 1) % track.steps;
-      this.next += track.stepDur;
+      this.next += track.stepDur / this.tempo;
     }
   }
 }

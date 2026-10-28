@@ -96,6 +96,10 @@ export function guardStyle(g: Guard): FigureStyle {
   if (g.kind === 'target') {
     Object.assign(base, { trim: '#e8c050', cape: true, weapon: combat ? 'sword' : 'none' }, TARGET_LOOKS[g.targetId ?? ''] ?? {});
   }
+  // Decoys wear exactly what he wears; only eagle vision tells them apart.
+  if (g.kind === 'boss' || g.kind === 'decoy') {
+    Object.assign(base, { robe: '#ece8de', trim: '#9a1a1a', head: 'helmet', headColor: '#d8cfb4', weapon: 'sword', cape: true, crest: '#b01a1a', scale: 1.15 });
+  }
   if (g.hurtT > 0) base.robe = mix(base.robe, '#ffffff', 0.5);
   return base;
 }
@@ -273,6 +277,7 @@ export class Renderer {
     this.drawVisionCones(ctx, w, x0, x1);
     this.drawDocs(ctx, w, x0, x1);
     this.drawPickups(ctx, w, x0, x1);
+    this.drawGate(ctx, w);
     this.drawMarker(ctx, w);
 
     for (const c of w.civilians) {
@@ -334,7 +339,7 @@ export class Renderer {
     const y = b.topTy * TILE;
     const wpx = b.tw * TILE;
     const h = GROUND_Y - y;
-    const base = b.kind === 'cathedral' ? '#e2d6c0' : b.kind === 'tower' ? mix(pal.wall[b.variant], '#000000', 0.12) : pal.wall[b.variant];
+    const base = b.kind === 'cathedral' ? '#e2d6c0' : b.kind === 'tower' || b.kind === 'belfry' ? mix(pal.wall[b.variant], '#000000', 0.12) : pal.wall[b.variant];
     ctx.fillStyle = base;
     ctx.fillRect(x, y, wpx, h);
     // subtle stone courses
@@ -384,7 +389,7 @@ export class Renderer {
     ctx.fillRect(x - 4, y - 2, wpx + 8, 8);
     ctx.fillStyle = 'rgba(255,220,180,0.25)';
     ctx.fillRect(x - 4, y - 2, wpx + 8, 2);
-    if (b.kind === 'tower' || b.kind === 'cathedral') {
+    if (b.kind === 'tower' || b.kind === 'cathedral' || b.kind === 'belfry') {
       ctx.fillStyle = pal.roof;
       for (let i = 0; i < wpx; i += 12) ctx.fillRect(x + i, y - 8, 6, 6);
     }
@@ -398,6 +403,22 @@ export class Renderer {
       ctx.beginPath();
       ctx.arc(cx, y + 70, 20, 0, Math.PI * 2);
       ctx.fill();
+    }
+    if (b.kind === 'belfry') {
+      // bell under an arch near the top
+      const cx = x + wpx / 2;
+      ctx.fillStyle = '#2a1e1a';
+      ctx.fillRect(cx - 22, y + 20, 44, 60);
+      ctx.fillStyle = '#c8a040';
+      ctx.beginPath();
+      ctx.moveTo(cx - 14, y + 70);
+      ctx.quadraticCurveTo(cx - 12, y + 32, cx, y + 30);
+      ctx.quadraticCurveTo(cx + 12, y + 32, cx + 14, y + 70);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillStyle = '#a01818';
+      ctx.fillRect(cx - 3, y + 100, 6, 26);
+      ctx.fillRect(cx - 11, y + 108, 22, 6);
     }
     if (b.kind === 'hideout') {
       // emblem banner
@@ -511,6 +532,45 @@ export class Renderer {
   }
 
   /** Tutorial goal: a soft pillar of light with a bobbing arrow. */
+  /** The order's gate at the east end of town: shut until every target is dead. */
+  private drawGate(ctx: CanvasRenderingContext2D, w: World): void {
+    const g = w.city.bossGate;
+    if (!g) return;
+    const open = w.gateOpen;
+    const x = g.x;
+    const y = g.y;
+    ctx.fillStyle = '#4a4650';
+    ctx.fillRect(x - 34, y - 96, 68, 96);
+    ctx.fillStyle = '#5c5864';
+    ctx.fillRect(x - 40, y - 104, 80, 12);
+    ctx.fillStyle = open ? '#1a0c08' : '#2a2026';
+    ctx.beginPath();
+    ctx.moveTo(x - 22, y);
+    ctx.lineTo(x - 22, y - 58);
+    ctx.arc(x, y - 58, 22, Math.PI, 0);
+    ctx.lineTo(x + 22, y);
+    ctx.closePath();
+    ctx.fill();
+    if (open) {
+      const glow = 0.35 + 0.15 * Math.sin(w.time * 3);
+      ctx.fillStyle = `rgba(255,190,90,${glow})`;
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = '#6a6470';
+      ctx.lineWidth = 2;
+      for (let i = -16; i <= 16; i += 8) {
+        ctx.beginPath();
+        ctx.moveTo(x + i, y);
+        ctx.lineTo(x + i, y - 70);
+        ctx.stroke();
+      }
+    }
+    // red cross of the order
+    ctx.fillStyle = '#a01818';
+    ctx.fillRect(x - 3, y - 100, 6, 16);
+    ctx.fillRect(x - 8, y - 95, 16, 5);
+  }
+
   private drawMarker(ctx: CanvasRenderingContext2D, w: World): void {
     const m = w.marker;
     if (!m) return;
@@ -650,6 +710,7 @@ export class Renderer {
         text = counter ? 'J カウンター' : 'J 暗殺';
         at = { x: t.cx, y: t.body.y - 34 };
       } else if (p.state === 'ground' && w.map.at(p.cx, p.feet - 4) === Tile.Hay) text = 'F 隠れる';
+      else if (p.state === 'ground' && w.nearGate()) text = 'F 騎士団の門へ（決戦）';
     } else if (p.state === 'air') {
       const t = p.findAirTarget(w);
       if (t) {

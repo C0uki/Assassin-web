@@ -53,6 +53,7 @@ export function guardBlocks(g: Guard, fromX: number, comboStep: number, roll: nu
   if (comboStep >= 2) return false;
   if (g.kind === 'elite') return roll < 0.6;
   if (g.kind === 'brute') return roll < 0.5;
+  if (g.kind === 'boss') return roll < 0.6;
   if (g.kind === 'target') return roll < 0.3;
   return false;
 }
@@ -65,13 +66,15 @@ export function guardTakesHit(w: World, g: Guard, dmg: number, comboStep: number
     w.noise(g.cx, g.feet, 220, 'clash');
     return 'blocked';
   }
-  g.hp -= dmg;
-  g.hurtT = 0.2;
   w.sound('hit');
   w.fx.blood(g.cx, g.body.y + 16, sign(g.cx - fromX) || 1, 5);
   w.hitStop(0.05);
   w.noise(g.cx, g.feet, 220, 'clash');
   w.panic(g.cx, 220);
+  // The grand master never staggers from plain blows, and his health stops at each phase.
+  if (g.kind === 'boss' && w.boss) return w.boss.damage(g, dmg, 'combat') ? 'killed' : 'hit';
+  g.hp -= dmg;
+  g.hurtT = 0.2;
   if (g.hp <= 0) {
     w.killGuard(g, 'combat');
     return 'killed';

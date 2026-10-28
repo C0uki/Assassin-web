@@ -7,8 +7,8 @@ export const WORLD_TH = 40;
 export const GROUND_ROW = 35;
 export const GROUND_Y = GROUND_ROW * TILE;
 
-export type BuildingKind = 'house' | 'tower' | 'warehouse' | 'manor' | 'cathedral' | 'hideout' | 'wall';
-export type GuardKind = 'guard' | 'elite' | 'archer' | 'target' | 'chaser' | 'brute' | 'dog';
+export type BuildingKind = 'house' | 'tower' | 'warehouse' | 'manor' | 'cathedral' | 'hideout' | 'wall' | 'belfry';
+export type GuardKind = 'guard' | 'elite' | 'archer' | 'target' | 'chaser' | 'brute' | 'dog' | 'boss' | 'decoy';
 
 export interface Building {
   tx: number;
@@ -94,6 +94,10 @@ export interface CityDef {
   docs: DocSpawn[];
   pickups: PickupSpawn[];
   hideouts: HideoutDef[];
+  /** Where the player starts when there is no hideout (the final duel). */
+  start?: { x: number; y: number };
+  /** Door to the final duel; opens once every target is dead. */
+  bossGate?: { x: number; y: number };
 }
 
 export const TARGETS: TargetDef[] = [
@@ -102,8 +106,11 @@ export const TARGETS: TargetDef[] = [
   { id: 't3', name: 'カシム', title: '奴隷商人', desc: '大市場の広場で競りを開く。人混みに紛れて近づけ。', district: 1 },
   { id: 't4', name: 'セリーン', title: '毒薬師', desc: '高い館のバルコニーで調合している。', district: 1 },
   { id: 't5', name: 'ロートフェルト', title: '司令官', desc: '中庭で精鋭兵を率いる。正面からは危険だ。', district: 2 },
-  { id: 't6', name: 'アルマン', title: '大司祭', desc: '大聖堂の屋上で祈る教団の首領。', district: 2 },
+  { id: 't6', name: 'アルマン', title: '大司祭', desc: '大聖堂の屋上で祈る、騎士団総長の右腕。', district: 2 },
 ];
+
+/** The man behind the six targets, met only in the final duel. */
+export const BOSS = { name: 'モルディウス', title: '騎士団総長' };
 
 const DISTRICTS: DistrictDef[] = [
   { name: 'スラム街', sub: '下層区', x0: 0, x1: 200 * TILE },
@@ -402,6 +409,8 @@ export function buildCity(seed = 1337): CityDef {
 
   assignSpecialists(city);
   placePickups(city, fillers);
+  // A gate in front of the last houses; it is only drawn, so the tiles stay the same.
+  city.bossGate = { x: BOSS_GATE_TX * TILE, y: GROUND_Y };
   return city;
 }
 
@@ -452,6 +461,8 @@ function placePickups(city: CityDef, fillers: Building[]): void {
 }
 
 export const PLAYER_START = { x: 6.5 * TILE, y: GROUND_Y };
+
+export const BOSS_GATE_TX = 596;
 
 export const TRAINING_TW = 130;
 
@@ -506,5 +517,61 @@ export function buildTrainingGround(): CityDef {
   addBeam(T.airBeam.tx, GROUND_ROW - T.airPerch.h, T.airBeam.tw);
   addBuilding(T.knifeRoof.tx, T.knifeRoof.tw, T.knifeRoof.h, 'warehouse', 0);
   city.civGroups.push({ x: (T.crowd.x0 + 2) * TILE, count: 5, minX: T.crowd.x0 * TILE, maxX: T.crowd.x1 * TILE, district: 0 });
+  return city;
+}
+
+export const ARENA_TW = 90;
+
+/** Tile layout of the square in front of the order's chapter house. */
+export const ARENA = {
+  start: 4,
+  perch: { tx: 9, tw: 4, h: 5 },
+  pillars: [18, 28, 46, 56],
+  beams: [
+    { tx: 20, tw: 8 },
+    { tx: 48, tw: 8 },
+  ],
+  beamH: 7,
+  hays: [15, 63],
+  plaza: { x0: 16, x1: 68 },
+  belfry: { tx: 74, tw: 10, h: 15 },
+  /** Height of the balcony floor inside the belfry front. */
+  balconyH: 8,
+  bossX: 42,
+} as const;
+
+/** The final duel: a closed square with beams to drop from and a belfry with a balcony. */
+export function buildArena(): CityDef {
+  const rng = new Rng(77);
+  const map = new TileMap(ARENA_TW, WORLD_TH);
+  map.fill(0, GROUND_ROW, ARENA_TW, WORLD_TH - GROUND_ROW, Tile.Solid);
+  const A = ARENA;
+  const city: CityDef = {
+    map,
+    buildings: [],
+    beams: [],
+    hays: [],
+    districts: [{ name: '騎士団の聖堂前', sub: '決戦', x0: 0, x1: ARENA_TW * TILE }],
+    guards: [],
+    targets: [],
+    civGroups: [],
+    docs: [],
+    pickups: [],
+    hideouts: [],
+    start: { x: A.start * TILE, y: GROUND_Y },
+  };
+  const { addBuilding, addHay, addBeam, guard } = cityHelpers(city, rng);
+  addBuilding(0, 3, 12, 'tower', 0);
+  addBuilding(A.perch.tx, A.perch.tw, A.perch.h, 'house', 0);
+  for (const tx of A.pillars) addBuilding(tx, 2, A.beamH, 'tower', 0);
+  for (const b of A.beams) addBeam(b.tx, GROUND_ROW - A.beamH, b.tw);
+  for (const tx of A.hays) addHay(tx);
+  const bf = addBuilding(A.belfry.tx, A.belfry.tw, A.belfry.h, 'belfry', 0);
+  const by = GROUND_ROW - A.balconyH;
+  map.fill(bf.tx, by, bf.tw, 1, Tile.Roof);
+  city.beams.push({ tx: bf.tx, ty: by, tw: bf.tw });
+  // A house just taller than the balcony: the way up that he cannot swat you off.
+  addBuilding(A.belfry.tx + A.belfry.tw, ARENA_TW - A.belfry.tx - A.belfry.tw, A.balconyH + 2, 'house', 0);
+  guard('boss', A.bossX * TILE, GROUND_Y, [A.plaza.x0 * TILE, A.plaza.x1 * TILE], 0, -1);
   return city;
 }

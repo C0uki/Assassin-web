@@ -30,10 +30,10 @@ export class ResultScene implements Scene {
     ctx.textAlign = 'center';
     ctx.font = `bold 40px ${FONT}`;
     ctx.fillStyle = '#ffe2a0';
-    ctx.fillText('全ての標的を始末した', VIEW_W / 2, 110);
+    ctx.fillText('騎士団は滅びた', VIEW_W / 2, 110);
     ctx.font = `15px ${FONT}`;
     ctx.fillStyle = '#e8d8c0';
-    ctx.fillText('教団は崩れ去り、街に夜明けが訪れる。', VIEW_W / 2, 142);
+    ctx.fillText('六人の標的と総長は倒れ、街に夜明けが訪れる。', VIEW_W / 2, 142);
     const min = Math.floor(s.time / 60);
     const sec = Math.floor(s.time % 60);
     const rows: [string, string][] = [
@@ -43,16 +43,17 @@ export class ResultScene implements Scene {
       ['戦闘での撃破', `${s.combatKills}`],
       ['市民の犠牲', `${s.civilianKills}`],
       ['力尽きた回数', `${s.deaths}`],
+      ['総長への挑戦', `${s.bossAttempts} 回`],
       ['古文書', `${this.save.docs.length} / ${TOTAL_DOCS}`],
     ];
     ctx.font = `16px ${FONT}`;
     rows.forEach(([k, v], i) => {
       ctx.textAlign = 'right';
       ctx.fillStyle = '#cdbfa6';
-      ctx.fillText(k, VIEW_W / 2 - 20, 200 + i * 30);
+      ctx.fillText(k, VIEW_W / 2 - 20, 190 + i * 28);
       ctx.textAlign = 'left';
       ctx.fillStyle = '#ffffff';
-      ctx.fillText(v, VIEW_W / 2 + 20, 200 + i * 30);
+      ctx.fillText(v, VIEW_W / 2 + 20, 190 + i * 28);
     });
     ctx.textAlign = 'center';
     ctx.font = `bold 52px ${FONT}`;

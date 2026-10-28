@@ -17,6 +17,7 @@ export class AudioSystem {
   private synth: Synth | null = null;
   private music: Music | null = null;
   private wantMode: MusicMode = 'none';
+  private wantTempo = 1;
   private volumes: Volumes = { master: 8, music: 7, sfx: 8 };
   muted = false;
 
@@ -35,6 +36,7 @@ export class AudioSystem {
       this.synth = new Synth(this.ctx, this.sfxBus);
       this.music = new Music(new Synth(this.ctx, this.musicBus), this.musicBus);
       this.music.setMode(this.wantMode);
+      this.music.tempo = this.wantTempo;
     } catch {
       this.ctx = null;
     }
@@ -71,9 +73,11 @@ export class AudioSystem {
     }
   }
 
-  setMusic(mode: MusicMode): void {
+  setMusic(mode: MusicMode, tempo = 1): void {
     this.wantMode = mode;
+    this.wantTempo = tempo;
     this.music?.setMode(mode);
+    if (this.music) this.music.tempo = tempo;
   }
 
   update(): void {

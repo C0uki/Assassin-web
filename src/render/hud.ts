@@ -1,6 +1,7 @@
 import { VIEW_H, VIEW_W } from '../core/camera';
 import { TOTAL_DOCS } from '../systems/progress';
-import { GROUND_ROW } from '../world/city';
+import { BOSS, GROUND_ROW } from '../world/city';
+import { PHASE_FLOOR } from '../systems/boss';
 import type { Tutorial } from '../systems/tutorial';
 import type { World } from '../world/world';
 
@@ -35,6 +36,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: HudExtra
   ctx.fillStyle = '#e8e0cc';
   ctx.fillText(`薬 ${p.potions}/${w.playerStats.maxPotions}   ナイフ ${p.knives}/${w.playerStats.maxKnives}   煙玉 ${p.smokes}/${w.playerStats.maxSmokes}`, 14, 44);
   if (extra.tutorial) drawTutorial(ctx, extra.tutorial);
+  else if (w.boss) drawBossBar(ctx, w);
   else {
     ctx.fillText(`文書 ${w.save.docs.length}/${TOTAL_DOCS}   標的 ${w.save.targetsKilled.length}/${w.city.targets.length}`, 14, 60);
     drawMinimap(ctx, w);
@@ -67,7 +69,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: HudExtra
   // messages
   ctx.textAlign = 'center';
   ctx.font = `bold 16px ${FONT}`;
-  const msgY = extra.tutorial ? 104 : 50;
+  const msgY = extra.tutorial ? 104 : w.boss ? 66 : 50;
   w.messages.forEach((m, i) => {
     ctx.globalAlpha = Math.min(1, m.t * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
@@ -110,11 +112,31 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: HudExtra
     ctx.textAlign = 'center';
     ctx.font = `bold 40px ${FONT}`;
     ctx.fillStyle = '#ffdddd';
-    ctx.fillText('力尽きた……', VIEW_W / 2, VIEW_H / 2 - 10);
+    ctx.fillText(w.boss ? '総長に敗れた……' : '力尽きた……', VIEW_W / 2, VIEW_H / 2 - 10);
     ctx.font = `15px ${FONT}`;
-    ctx.fillText('最後に訪れた隠れ家で目を覚ます', VIEW_W / 2, VIEW_H / 2 + 24);
+    if (!w.boss) ctx.fillText('最後に訪れた隠れ家で目を覚ます', VIEW_W / 2, VIEW_H / 2 + 24);
     ctx.globalAlpha = 1;
   }
+}
+
+function drawBossBar(ctx: CanvasRenderingContext2D, w: World): void {
+  const boss = w.boss!.boss;
+  const x = 240;
+  const bw = VIEW_W - 480;
+  const y = 30;
+  ctx.textAlign = 'center';
+  ctx.font = `bold 13px ${FONT}`;
+  ctx.fillStyle = '#ffd0a0';
+  ctx.fillText(`${BOSS.title} ${BOSS.name}`, VIEW_W / 2, y - 8);
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(x - 2, y - 2, bw + 4, 14);
+  const frac = Math.max(0, boss.hp) / boss.maxHp;
+  ctx.fillStyle = boss.hurtT > 0 ? '#ffffff' : '#c02a22';
+  ctx.fillRect(x, y, bw * frac, 10);
+  // phase notches
+  ctx.fillStyle = '#ffe2a0';
+  for (const f of [PHASE_FLOOR[1], PHASE_FLOOR[2]]) ctx.fillRect(x + (bw * f) / boss.maxHp - 1, y - 3, 2, 16);
+  ctx.textAlign = 'left';
 }
 
 function drawTutorial(ctx: CanvasRenderingContext2D, t: Tutorial): void {
