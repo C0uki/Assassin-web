@@ -73,12 +73,16 @@ describe('training ground', () => {
     });
     until(5, (i) => {
       if (p.hidden) return tap('interact');
+      if (p.state === 'ground' && i % 20 === 0) tap('jump');
+      if (p.state === 'air' && p.body.vy > 250) tap('dodge');
+    });
+    until(6, (i) => {
       const g = w.guards.find((x) => x.alive && x.passive);
       steer(g ? g.cx - 30 : p.cx);
       if (g && Math.abs(p.cx - (g.cx - 30)) < 6 && i % 10 === 0) tap('attack');
     });
     let onBeam = false;
-    until(6, (i) => {
+    until(7, (i) => {
       const g = w.guards.find((x) => x.alive && x.passive);
       if (!g) return hold();
       if (p.state === 'ground' && p.feet < GROUND_Y - 100 && p.cx > (TRAINING.airBeam.tx + 0.5) * TILE) onBeam = true;
@@ -90,15 +94,15 @@ describe('training ground', () => {
         else if (i % 4 === 0) tap('attack');
       }
     });
-    until(7, () => {
+    until(8, () => {
       const civs = w.civilians.filter((c) => c.state === 'walk');
       steer(civs.reduce((s, c) => s + c.x, 0) / civs.length);
     });
-    until(8, (i) => {
+    until(9, (i) => {
       steer(TRAINING.spar * TILE - 60);
       if (i % 20 === 0) tap('dodge');
     });
-    until(9, () => {
+    until(10, () => {
       const g = t.partner!;
       const winding = g.attack.phase === 'windup' && g.attack.t < 0.12;
       if (g.state === 'staggered' && g.parried) {
@@ -107,24 +111,24 @@ describe('training ground', () => {
       } else if (winding || (input.isHeld('guard') && g.attack.phase !== 'none')) hold('guard');
       else steer(g.cx - 34);
     }, 60);
-    until(10, (i) => {
+    until(11, (i) => {
       const g = t.partner!;
       steer(g.cx - 30);
       if (i % 9 === 0) tap('attack');
     }, 60);
-    until(11, () => hold('eagle'));
-    until(12, (i) => {
+    until(12, () => hold('eagle'));
+    until(13, (i) => {
       steer(TRAINING.knifeRoof.tx * TILE - 120);
       if (i % 30 === 0) tap('knife');
     });
-    until(13, (i) => {
+    until(14, (i) => {
       const food = w.pickups.find((it) => it.kind === 'food' && it.respawnT === 0);
       if (w.healCounts.potion === 0) {
         hold();
         if (p.state === 'ground' && i % 5 === 0) input.press('heal');
       } else if (food) steer(food.x);
     });
-    until(14, () => {
+    until(15, () => {
       hold();
       tap('smoke');
     });

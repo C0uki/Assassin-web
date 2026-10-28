@@ -75,8 +75,16 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     update: (w) => w.player.hidden && w.map.at(w.player.cx, w.player.feet - 4) === Tile.Hay,
   },
   {
+    title: '受け身',
+    text: ['干し草から出て（F）、ジャンプして着地の直前に L で受け身。', '高い所から落ちても受け身をとれば無傷。フリーランは安全に着地できない端では止まる。'],
+    setup: (w, t) => {
+      t.baseline = w.breakfalls;
+    },
+    update: (w, _dt, t) => w.breakfalls > t.baseline,
+  },
+  {
     title: '背後からの暗殺',
-    text: ['干し草から出て（F）、背を向けた衛兵に後ろから近づく。', '「J 暗殺」が出たら J。'],
+    text: ['背を向けた衛兵に後ろから近づく。', '「J 暗殺」が出たら J。'],
     marker: { x: px(TRAINING.backKill), y: GROUND_Y - 60 },
     setup: (w, t) => {
       t.baseline = w.killCounts.assassinate;

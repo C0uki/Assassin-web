@@ -104,6 +104,7 @@ export class World {
   civKillsThisLife = 0;
   readonly killCounts: Record<KillKind, number> = { assassinate: 0, air: 0, hay: 0, counter: 0, combat: 0, knife: 0 };
   readonly healCounts: Record<PickupKind, number> = { food: 0, potion: 0 };
+  breakfalls = 0;
   /** Overridable for tests. */
   random: () => number = Math.random;
   /** Where the tutorial wants the player to go next. */
