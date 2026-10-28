@@ -19,6 +19,7 @@ export type PlayerState =
   | 'assassinate'
   | 'airAssassinate'
   | 'hurt'
+  | 'drink'
   | 'dead';
 
 export type HitResult = 'miss' | 'block' | 'parry' | 'hit';
@@ -38,6 +39,8 @@ export const PARRY_WINDOW = 0.18;
 const DODGE_TIME = 0.32;
 const DODGE_IFRAMES = 0.26;
 export const SAFE_FALL_SPEED = 980;
+export const DRINK_TIME = 0.6;
+export const POTION_HEAL = 4;
 
 interface AttackPhase {
   windup: number;
@@ -68,6 +71,7 @@ export class Player {
   swingHit = new Set<object>();
   knives: number;
   smokes: number;
+  potions: number;
   freerun = false;
   blended = false;
   animT = 0;
@@ -82,11 +86,12 @@ export class Player {
   inHideout = false;
   civBumpT = 0;
 
-  constructor(x: number, feetY: number, maxHp: number, knives: number, smokes: number) {
+  constructor(x: number, feetY: number, maxHp: number, knives: number, smokes: number, potions: number) {
     this.body = makeBody(x - 8, feetY - 40, 16, 40);
     this.hp = maxHp;
     this.knives = knives;
     this.smokes = smokes;
+    this.potions = potions;
   }
 
   get cx(): number {
@@ -157,6 +162,9 @@ export class Player {
         break;
       case 'airAssassinate':
         this.updateAirAssassinate(w, dt);
+        break;
+      case 'drink':
+        this.updateDrink(w, dt);
         break;
       case 'hurt':
         this.body.vx = approach(this.body.vx, 0, 600 * dt);
@@ -260,6 +268,7 @@ export class Player {
       return this.setState('guard');
     }
     if (grounded && input.wasPressed('dodge') && this.dodgeCd <= 0) return this.startDodge(ax);
+    if (grounded && input.wasPressed('heal') && this.startDrink(w)) return this.physics(w, dt);
     if (input.wasPressed('knife')) this.throwKnife(w);
     if (grounded && input.wasPressed('smoke')) this.throwSmoke(w);
 
@@ -706,6 +715,32 @@ export class Player {
     w.sound('throw');
   }
 
+  /** Start drinking a potion; returns false (with a hint) when it would be wasted. */
+  private startDrink(w: World): boolean {
+    if (this.potions <= 0) {
+      w.message('薬がない', '#c9a0a0');
+      return false;
+    }
+    if (this.hp >= w.playerStats.maxHp) {
+      w.message('体力は満タンだ', '#c9c0a0');
+      return false;
+    }
+    this.body.vx = 0;
+    this.setState('drink');
+    w.sound('drink');
+    return true;
+  }
+
+  /** Standing still while drinking; a hit interrupts it (via `damage`) and the potion is kept. */
+  private updateDrink(w: World, dt: number): void {
+    this.body.vx = approach(this.body.vx, 0, 900 * dt);
+    this.physics(w, dt);
+    if (this.stateT < DRINK_TIME) return;
+    this.potions--;
+    w.heal(POTION_HEAL, 'potion');
+    this.setState('ground');
+  }
+
   private throwSmoke(w: World): void {
     if (this.smokes <= 0) {
       w.message('煙玉がない', '#c9a0a0');
@@ -716,13 +751,14 @@ export class Player {
   }
 
   /** Fixed-step respawn reset. */
-  respawn(x: number, feetY: number, maxHp: number, knives: number, smokes: number): void {
+  respawn(x: number, feetY: number, maxHp: number, knives: number, smokes: number, potions: number): void {
     this.body.x = x - this.body.w / 2;
     this.body.y = feetY - this.body.h;
     this.body.vx = this.body.vy = 0;
     this.hp = maxHp;
     this.knives = knives;
     this.smokes = smokes;
+    this.potions = potions;
     this.iframes = 1.5;
     this.setState('ground');
   }

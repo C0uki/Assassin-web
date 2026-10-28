@@ -117,7 +117,14 @@ describe('training ground', () => {
       steer(TRAINING.knifeRoof.tx * TILE - 120);
       if (i % 30 === 0) tap('knife');
     });
-    until(13, () => {
+    until(13, (i) => {
+      const food = w.pickups.find((it) => it.kind === 'food' && it.respawnT === 0);
+      if (w.healCounts.potion === 0) {
+        hold();
+        if (p.state === 'ground' && i % 5 === 0) input.press('heal');
+      } else if (food) steer(food.x);
+    });
+    until(14, () => {
       hold();
       tap('smoke');
     });

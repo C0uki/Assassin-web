@@ -25,6 +25,16 @@ describe('city layout', () => {
     for (const d of city.docs) expect(city.map.at(d.x, d.y + 20)).toBe(Tile.Roof);
   });
 
+  it('puts food on the streets and potions on rooftops in every district', () => {
+    const food = city.pickups.filter((p) => p.kind === 'food');
+    const potions = city.pickups.filter((p) => p.kind === 'potion');
+    expect(food).toHaveLength(18);
+    expect(potions).toHaveLength(6);
+    for (const f of food) expect(f.y).toBe(GROUND_Y - 12);
+    for (const p of potions) expect(city.map.at(p.x, p.y + 16)).toBe(Tile.Roof);
+    expect(new Set(city.pickups.map((p) => p.id)).size).toBe(city.pickups.length);
+  });
+
   it('spawns every guard on a floor', () => {
     for (const g of city.guards) expect(hasFloorAt(city.map, g.x, g.y - 1), `${g.kind} at ${g.x},${g.y}`).toBe(true);
   });

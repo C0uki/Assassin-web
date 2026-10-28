@@ -19,7 +19,7 @@ import {
   writeSave,
 } from '../systems/progress';
 import type { Smoke } from '../systems/stealth';
-import { CityDef, GROUND_Y, HideoutDef, districtAt } from './city';
+import { CityDef, GROUND_Y, HideoutDef, PickupKind, districtAt } from './city';
 import { lineOfSight } from './los';
 import { TileMap } from './tilemap';
 
@@ -44,6 +44,21 @@ export interface Doc {
   y: number;
 }
 
+export interface Pickup {
+  id: string;
+  kind: PickupKind;
+  x: number;
+  y: number;
+  /** Seconds until it reappears; 0 while it is lying there. */
+  respawnT: number;
+  /** Dropped by an enemy: gone for good once taken. */
+  dropped: boolean;
+}
+
+export const FOOD_HEAL = 2;
+export const PICKUP_RESPAWN = 90;
+export const FOOD_DROP_CHANCE = 0.25;
+
 export interface Hideout extends HideoutDef {
   found: boolean;
 }
@@ -64,6 +79,7 @@ export class World {
   projectiles: Projectile[] = [];
   smokes: Smoke[] = [];
   docs: Doc[] = [];
+  pickups: Pickup[] = [];
   hideouts: Hideout[];
   heardNoises: Noise[] = [];
   private pendingNoises: Noise[] = [];
@@ -87,6 +103,9 @@ export class World {
   victoryT = -1;
   civKillsThisLife = 0;
   readonly killCounts: Record<KillKind, number> = { assassinate: 0, air: 0, hay: 0, counter: 0, combat: 0, knife: 0 };
+  readonly healCounts: Record<PickupKind, number> = { food: 0, potion: 0 };
+  /** Overridable for tests. */
+  random: () => number = Math.random;
   /** Where the tutorial wants the player to go next. */
   marker: { x: number; y: number } | null = null;
 
@@ -101,7 +120,7 @@ export class World {
     this.hideouts = city.hideouts.map((h) => ({ ...h, found: save.hideoutsFound.includes(h.id) }));
     const home = this.respawnPoint();
     const s = this.playerStats;
-    this.player = new Player(home.x, home.y, s.maxHp, s.maxKnives, s.maxSmokes);
+    this.player = new Player(home.x, home.y, s.maxHp, s.maxKnives, s.maxSmokes, s.maxPotions);
     this.spawnEntities();
   }
 
@@ -129,6 +148,7 @@ export class World {
     }
     const taken = new Set(this.save.docs);
     this.docs = this.city.docs.filter((d) => !taken.has(d.id)).map((d) => ({ ...d }));
+    this.pickups = this.city.pickups.map((p) => ({ ...p, respawnT: 0, dropped: false }));
     this.corpses = [];
     this.projectiles = [];
     this.smokes = [];
@@ -143,7 +163,7 @@ export class World {
     this.spawnEntities();
     const p = this.respawnPoint();
     const s = this.playerStats;
-    this.player.respawn(p.x, p.y, s.maxHp, s.maxKnives, s.maxSmokes);
+    this.player.respawn(p.x, p.y, s.maxHp, s.maxKnives, s.maxSmokes, s.maxPotions);
     this.playerDeadT = -1;
     this.persist();
   }
@@ -248,6 +268,21 @@ export class World {
     if (any) this.sound('panic');
   }
 
+  /** Restore health from a potion or food, capped at the maximum. */
+  heal(amount: number, from: PickupKind): void {
+    const p = this.player;
+    const before = p.hp;
+    p.hp = Math.min(this.playerStats.maxHp, p.hp + amount);
+    this.healCounts[from]++;
+    this.sound(from === 'potion' ? 'heal' : 'eat');
+    this.fx.sparkle(p.cx, p.cy, 10);
+    this.message(`${from === 'potion' ? '薬を飲んだ' : '食べ物を食べた'}（体力 +${p.hp - before}）`, '#b6ff9f');
+  }
+
+  dropFood(x: number, y: number): void {
+    this.pickups.push({ id: `drop${this.pickups.length}`, kind: 'food', x, y: y - 12, respawnT: 0, dropped: true });
+  }
+
   alertGuard(g: Guard): void {
     if (g.state !== 'combat') enterCombat(g, this, true);
   }
@@ -288,6 +323,7 @@ export class World {
       this.noise(g.cx, g.feet, 200, 'clash');
     }
     this.killCounts[how]++;
+    if (this.random() < FOOD_DROP_CHANCE) this.dropFood(g.cx + sign(g.cx - p.cx) * 14, g.feet);
     this.hitStop(0.06);
     this.shake(3);
     if (g.targetId) this.onTargetKilled(g.targetId);
@@ -374,6 +410,7 @@ export class World {
     this.updateCivilians(dt);
     this.updateProjectiles(dt);
     for (const s of this.smokes) s.life -= dt;
+    for (const it of this.pickups) if (it.respawnT > 0) it.respawnT = Math.max(0, it.respawnT - dt);
     this.smokes = this.smokes.filter((s) => s.life > 0);
     if (!p.dead) {
       this.updatePickups();
@@ -494,6 +531,20 @@ export class World {
 
   private updatePickups(): void {
     const p = this.player;
+    for (const it of this.pickups) {
+      if (it.respawnT > 0 || Math.abs(it.x - p.cx) > 18 || Math.abs(it.y - p.cy) > 32) continue;
+      if (it.kind === 'food') {
+        if (p.hp >= this.playerStats.maxHp) continue;
+        this.heal(FOOD_HEAL, 'food');
+      } else {
+        if (p.potions >= this.playerStats.maxPotions) continue;
+        p.potions++;
+        this.message(`薬を手に入れた (${p.potions}/${this.playerStats.maxPotions})`, '#9fffc8');
+        this.sound('pickup');
+      }
+      it.respawnT = it.dropped ? -1 : PICKUP_RESPAWN;
+    }
+    this.pickups = this.pickups.filter((it) => it.respawnT >= 0);
     for (const d of this.docs) {
       if (Math.abs(d.x - p.cx) < 18 && Math.abs(d.y - p.cy) < 32) {
         this.docs = this.docs.filter((x) => x !== d);
@@ -509,6 +560,7 @@ export class World {
           p.hp += this.playerStats.maxHp - old.maxHp;
           p.knives += this.playerStats.maxKnives - old.maxKnives;
           p.smokes += this.playerStats.maxSmokes - old.maxSmokes;
+          p.potions += this.playerStats.maxPotions - old.maxPotions;
           this.message(`強化：${unlocked[unlocked.length - 1].label}`, '#b6ff9f');
           this.sound('upgrade');
         }
@@ -538,6 +590,7 @@ export class World {
       p.hp = s.maxHp;
       p.knives = s.maxKnives;
       p.smokes = s.maxSmokes;
+      p.potions = s.maxPotions;
       this.message('隠れ家で休息した（体力・装備が回復）', '#c8f2d0');
       this.sound('save');
     }

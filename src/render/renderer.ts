@@ -17,6 +17,7 @@ import {
   climbPose,
   deadPose,
   divePose,
+  drinkPose,
   drawFigure,
   guardPose,
   hurtPose,
@@ -165,6 +166,8 @@ export function playerPose(p: Player): Pose {
     }
     case 'hurt':
       return hurtPose();
+    case 'drink':
+      return drinkPose(p.stateT);
     case 'dead':
       return deadPose();
     default:
@@ -177,6 +180,39 @@ export function playerStyle(p: Player): FigureStyle {
   if (p.state === 'attack' || p.state === 'guard') s.weapon = 'sword';
   s.bladeOut = p.state === 'assassinate' || p.state === 'airAssassinate';
   return s;
+}
+
+/** Small glass bottle with a cork. */
+export function drawPotion(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = '#3a8a5a';
+  ctx.beginPath();
+  ctx.arc(x, y + 3, 5.5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillRect(x - 2, y - 6, 4, 6);
+  ctx.fillStyle = '#8a6a3a';
+  ctx.fillRect(x - 2.5, y - 8, 5, 3);
+  ctx.fillStyle = 'rgba(220,255,230,0.7)';
+  ctx.fillRect(x - 3, y + 1, 2, 3);
+}
+
+/** A loaf of bread with a pomegranate. */
+export function drawFood(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  ctx.fillStyle = '#c8873e';
+  ctx.beginPath();
+  ctx.ellipse(x - 2, y + 2, 8, 5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#8a5424';
+  ctx.lineWidth = 1;
+  for (const dx of [-6, -2, 2]) {
+    ctx.beginPath();
+    ctx.moveTo(x + dx, y - 1);
+    ctx.lineTo(x + dx + 2, y + 3);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#b02a3a';
+  ctx.beginPath();
+  ctx.arc(x + 6, y + 3, 4, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 export class Renderer {
@@ -202,6 +238,7 @@ export class Renderer {
     this.drawHay(ctx, x0, x1, w);
     this.drawVisionCones(ctx, w, x0, x1);
     this.drawDocs(ctx, w, x0, x1);
+    this.drawPickups(ctx, w, x0, x1);
     this.drawMarker(ctx, w);
 
     for (const c of w.civilians) {
@@ -455,6 +492,19 @@ export class Renderer {
     ctx.lineTo(m.x + 9, m.y - 84 + bob);
     ctx.closePath();
     ctx.fill();
+  }
+
+  private drawPickups(ctx: CanvasRenderingContext2D, w: World, x0: number, x1: number): void {
+    for (const it of w.pickups) {
+      if (it.respawnT > 0 || it.x < x0 || it.x > x1) continue;
+      const y = it.y + Math.sin(w.time * 3 + it.x * 0.1) * 2.5;
+      ctx.fillStyle = it.kind === 'potion' ? 'rgba(140,255,170,0.22)' : 'rgba(255,220,150,0.18)';
+      ctx.beginPath();
+      ctx.arc(it.x, y, 12, 0, Math.PI * 2);
+      ctx.fill();
+      if (it.kind === 'potion') drawPotion(ctx, it.x, y);
+      else drawFood(ctx, it.x, y);
+    }
   }
 
   private drawVisionCones(ctx: CanvasRenderingContext2D, w: World, x0: number, x1: number): void {

@@ -77,7 +77,7 @@ export interface Upgrade {
 }
 
 export const UPGRADES: Upgrade[] = [
-  { docs: 5, id: 'hp1', label: '体力上限 +2' },
+  { docs: 5, id: 'hp1', label: '体力上限 +2・薬の所持数 +1' },
   { docs: 10, id: 'knives', label: '投げナイフ所持数 +2' },
   { docs: 15, id: 'climb', label: '登攀速度 +30%' },
   { docs: 20, id: 'quiet', label: 'フリーランの足音が静かに' },
@@ -89,6 +89,7 @@ export interface PlayerStats {
   maxHp: number;
   maxKnives: number;
   maxSmokes: number;
+  maxPotions: number;
   climbMul: number;
   quiet: boolean;
 }
@@ -103,6 +104,7 @@ export function statsFor(docCount: number): PlayerStats {
     maxHp: 10 + (ids.has('hp1') ? 2 : 0) + (ids.has('hp2') ? 2 : 0),
     maxKnives: 3 + (ids.has('knives') ? 2 : 0),
     maxSmokes: 1 + (ids.has('smoke') ? 1 : 0),
+    maxPotions: 2 + (ids.has('hp1') ? 1 : 0),
     climbMul: ids.has('climb') ? 1.3 : 1,
     quiet: ids.has('quiet'),
   };

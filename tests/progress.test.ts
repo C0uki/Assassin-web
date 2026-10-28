@@ -48,10 +48,11 @@ describe('save data', () => {
 
 describe('upgrades and rank', () => {
   it('unlocks upgrades by document count', () => {
-    expect(statsFor(0)).toEqual({ maxHp: 10, maxKnives: 3, maxSmokes: 1, climbMul: 1, quiet: false });
+    expect(statsFor(0)).toEqual({ maxHp: 10, maxKnives: 3, maxSmokes: 1, maxPotions: 2, climbMul: 1, quiet: false });
     expect(statsFor(5).maxHp).toBe(12);
+    expect(statsFor(5).maxPotions).toBe(3);
     expect(statsFor(10).maxKnives).toBe(5);
-    expect(statsFor(30)).toEqual({ maxHp: 14, maxKnives: 5, maxSmokes: 2, climbMul: 1.3, quiet: true });
+    expect(statsFor(30)).toEqual({ maxHp: 14, maxKnives: 5, maxSmokes: 2, maxPotions: 3, climbMul: 1.3, quiet: true });
   });
 
   it('ranks a ghost run above a bloody one', () => {

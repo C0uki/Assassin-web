@@ -23,6 +23,7 @@ export function testCity(build?: (map: TileMap) => void): CityDef {
     targets: [],
     civGroups: [],
     docs: [],
+    pickups: [],
     hideouts: [{ id: 0, x: 64, y: GROUND_Y - 64, w: 64, h: 64, district: 0 }],
   };
 }

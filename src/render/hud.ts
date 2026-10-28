@@ -33,7 +33,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: HudExtra
   }
   ctx.font = `12px ${FONT}`;
   ctx.fillStyle = '#e8e0cc';
-  ctx.fillText(`ナイフ ${p.knives}/${w.playerStats.maxKnives}   煙玉 ${p.smokes}/${w.playerStats.maxSmokes}`, 14, 44);
+  ctx.fillText(`薬 ${p.potions}/${w.playerStats.maxPotions}   ナイフ ${p.knives}/${w.playerStats.maxKnives}   煙玉 ${p.smokes}/${w.playerStats.maxSmokes}`, 14, 44);
   if (extra.tutorial) drawTutorial(ctx, extra.tutorial);
   else {
     ctx.fillText(`文書 ${w.save.docs.length}/${TOTAL_DOCS}   標的 ${w.save.targetsKilled.length}/${w.city.targets.length}`, 14, 60);
@@ -96,7 +96,7 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: HudExtra
   ctx.font = `11px ${FONT}`;
   ctx.fillStyle = 'rgba(240,230,210,0.6)';
   ctx.fillText(
-    'A/D 移動  Shift フリーラン  W/S 登る/降りる  Space ジャンプ  J 攻撃・暗殺  K 防御(パリィ)  L 回避  I ナイフ  O 煙玉  E 鷹の目  F 隠れる  Esc ポーズ',
+    'A/D 移動  Shift フリーラン  W/S 登る/降りる  Space ジャンプ  J 攻撃・暗殺  K 防御(パリィ)  L 回避  H 薬  I ナイフ  O 煙玉  E 鷹の目  F 隠れる  Esc ポーズ',
     14,
     VIEW_H - 12,
   );

@@ -143,6 +143,13 @@ export class Synth {
         return this.tone(233, 0.9, { type: 'sawtooth', vol: 0.06, attack: 0.1, at: t + 0.7 });
       case 'bump':
         return this.tone(300, 0.06, { type: 'triangle', vol: 0.05 });
+      case 'drink':
+        return [0, 0.15, 0.3].forEach((d) => this.noise(0.08, { freq: 700, type: 'bandpass', q: 4, vol: 0.06, at: t + d }));
+      case 'heal':
+        return [523, 784, 1047].forEach((f, i) => this.tone(f, 0.35, { vol: 0.06, at: t + i * 0.07 }));
+      case 'eat':
+        this.noise(0.06, { freq: 1800, type: 'bandpass', vol: 0.08 });
+        return this.tone(660, 0.2, { vol: 0.05, at: t + 0.08 });
       case 'menu':
         return this.tone(660, 0.08, { type: 'triangle', vol: 0.06 });
     }
