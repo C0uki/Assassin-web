@@ -13,7 +13,11 @@ test('title → game → move, climb and use eagle vision without errors', async
   });
 
   await page.goto('/?debug');
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    // Skip the first-run training ground; it has its own test.
+    localStorage.setItem('assassin-web-settings', JSON.stringify({ version: 1, master: 8, music: 7, sfx: 8, tutorialDone: true }));
+  });
   await page.reload();
   await page.waitForTimeout(500);
   await page.keyboard.press('Enter');

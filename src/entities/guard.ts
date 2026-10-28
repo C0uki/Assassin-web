@@ -45,6 +45,8 @@ export class Guard {
   deadT = 0;
   /** Spawned as reinforcement (despawns are not needed; it just patrols afterwards). */
   reinforcement = false;
+  /** Training dummy: stands still and never notices anything. */
+  passive = false;
   readonly district: number;
   readonly targetId?: string;
 

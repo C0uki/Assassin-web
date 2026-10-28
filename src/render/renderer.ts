@@ -32,7 +32,7 @@ import {
   walkPose,
   windupPose,
 } from './figures';
-import { drawHud } from './hud';
+import { HudExtra, drawHud } from './hud';
 
 const PALETTE = [
   { wall: ['#6e4c3a', '#5f4334', '#7a5843', '#674836'], roof: '#3f2a20', trim: '#4a3226' },
@@ -186,7 +186,7 @@ export class Renderer {
     this.bg = new Background(city.map.widthPx);
   }
 
-  draw(ctx: CanvasRenderingContext2D, w: World, cam: Camera, hudExtra: { muted: boolean }): void {
+  draw(ctx: CanvasRenderingContext2D, w: World, cam: Camera, hudExtra: HudExtra): void {
     const maxCamY = w.map.heightPx - VIEW_H;
     this.bg.draw(ctx, cam.x, cam.y, maxCamY);
 
@@ -202,6 +202,7 @@ export class Renderer {
     this.drawHay(ctx, x0, x1, w);
     this.drawVisionCones(ctx, w, x0, x1);
     this.drawDocs(ctx, w, x0, x1);
+    this.drawMarker(ctx, w);
 
     for (const c of w.civilians) {
       if (c.x < x0 || c.x > x1) continue;
@@ -435,6 +436,25 @@ export class Renderer {
       ctx.fillStyle = '#a03030';
       ctx.fillRect(d.x - 1, y - 1, 3, 3);
     }
+  }
+
+  /** Tutorial goal: a soft pillar of light with a bobbing arrow. */
+  private drawMarker(ctx: CanvasRenderingContext2D, w: World): void {
+    const m = w.marker;
+    if (!m) return;
+    const g = ctx.createLinearGradient(0, m.y - 220, 0, m.y);
+    g.addColorStop(0, 'rgba(255,230,150,0)');
+    g.addColorStop(1, 'rgba(255,230,150,0.35)');
+    ctx.fillStyle = g;
+    ctx.fillRect(m.x - 14, m.y - 220, 28, 220);
+    const bob = Math.sin(w.time * 4) * 5;
+    ctx.fillStyle = '#ffd98a';
+    ctx.beginPath();
+    ctx.moveTo(m.x, m.y - 70 + bob);
+    ctx.lineTo(m.x - 9, m.y - 84 + bob);
+    ctx.lineTo(m.x + 9, m.y - 84 + bob);
+    ctx.closePath();
+    ctx.fill();
   }
 
   private drawVisionCones(ctx: CanvasRenderingContext2D, w: World, x0: number, x1: number): void {

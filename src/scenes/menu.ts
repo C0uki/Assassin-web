@@ -20,13 +20,13 @@ export class Menu {
     return null;
   }
 
-  draw(ctx: CanvasRenderingContext2D, x: number, y: number): void {
+  draw(ctx: CanvasRenderingContext2D, x: number, y: number, spacing = 38): void {
     ctx.textAlign = 'center';
     ctx.font = `bold 20px ${FONT}`;
     this.items.forEach((item, i) => {
       const sel = i === this.index;
       ctx.fillStyle = sel ? '#fff4d6' : 'rgba(240,225,200,0.55)';
-      ctx.fillText(sel ? `◆ ${item} ◆` : item, x, y + i * 38);
+      ctx.fillText(sel ? `◆ ${item} ◆` : item, x, y + i * spacing);
     });
   }
 }

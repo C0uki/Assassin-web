@@ -1,6 +1,7 @@
 import { VIEW_H, VIEW_W } from '../core/camera';
 import { TOTAL_DOCS } from '../systems/progress';
 import { GROUND_ROW } from '../world/city';
+import type { Tutorial } from '../systems/tutorial';
 import type { World } from '../world/world';
 
 export const FONT = "'Hiragino Kaku Gothic ProN','Noto Sans JP','Yu Gothic',sans-serif";
@@ -12,7 +13,12 @@ const MAP_H = 22;
 
 let skyline: { x: number; w: number; h: number }[] | null = null;
 
-export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: { muted: boolean }): void {
+export interface HudExtra {
+  muted: boolean;
+  tutorial: Tutorial | null;
+}
+
+export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: HudExtra): void {
   const p = w.player;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
@@ -28,9 +34,11 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: { muted:
   ctx.font = `12px ${FONT}`;
   ctx.fillStyle = '#e8e0cc';
   ctx.fillText(`ナイフ ${p.knives}/${w.playerStats.maxKnives}   煙玉 ${p.smokes}/${w.playerStats.maxSmokes}`, 14, 44);
-  ctx.fillText(`文書 ${w.save.docs.length}/${TOTAL_DOCS}   標的 ${w.save.targetsKilled.length}/${w.city.targets.length}`, 14, 60);
-
-  drawMinimap(ctx, w);
+  if (extra.tutorial) drawTutorial(ctx, extra.tutorial);
+  else {
+    ctx.fillText(`文書 ${w.save.docs.length}/${TOTAL_DOCS}   標的 ${w.save.targetsKilled.length}/${w.city.targets.length}`, 14, 60);
+    drawMinimap(ctx, w);
+  }
 
   // status
   ctx.textAlign = 'right';
@@ -59,13 +67,14 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: { muted:
   // messages
   ctx.textAlign = 'center';
   ctx.font = `bold 16px ${FONT}`;
+  const msgY = extra.tutorial ? 104 : 50;
   w.messages.forEach((m, i) => {
     ctx.globalAlpha = Math.min(1, m.t * 2);
     ctx.fillStyle = 'rgba(0,0,0,0.55)';
     const tw = ctx.measureText(m.text).width + 24;
-    ctx.fillRect(VIEW_W / 2 - tw / 2, 50 + i * 28, tw, 24);
+    ctx.fillRect(VIEW_W / 2 - tw / 2, msgY + i * 28, tw, 24);
     ctx.fillStyle = m.color;
-    ctx.fillText(m.text, VIEW_W / 2, 68 + i * 28);
+    ctx.fillText(m.text, VIEW_W / 2, msgY + 18 + i * 28);
   });
   ctx.globalAlpha = 1;
 
@@ -105,6 +114,41 @@ export function drawHud(ctx: CanvasRenderingContext2D, w: World, extra: { muted:
     ctx.font = `15px ${FONT}`;
     ctx.fillText('最後に訪れた隠れ家で目を覚ます', VIEW_W / 2, VIEW_H / 2 + 24);
     ctx.globalAlpha = 1;
+  }
+}
+
+function drawTutorial(ctx: CanvasRenderingContext2D, t: Tutorial): void {
+  const step = t.current;
+  const x = 200;
+  const w = VIEW_W - 400;
+  ctx.fillStyle = 'rgba(10,8,12,0.72)';
+  ctx.fillRect(x, 8, w, 84);
+  ctx.strokeStyle = 'rgba(255,217,138,0.5)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x + 0.5, 8.5, w - 1, 83);
+  ctx.textAlign = 'left';
+  ctx.font = `bold 15px ${FONT}`;
+  ctx.fillStyle = '#ffd98a';
+  if (!step) {
+    ctx.fillText('訓練修了', x + 14, 32);
+    ctx.font = `13px ${FONT}`;
+    ctx.fillStyle = '#efe4cc';
+    ctx.fillText('まもなく街へ向かう……', x + 14, 56);
+    return;
+  }
+  ctx.fillText(`訓練 ${t.index + 1}/${t.steps.length} ― ${step.title}`, x + 14, 30);
+  ctx.textAlign = 'right';
+  ctx.font = `11px ${FONT}`;
+  ctx.fillStyle = 'rgba(240,230,210,0.6)';
+  ctx.fillText('Esc → 訓練を飛ばす', x + w - 12, 30);
+  ctx.textAlign = 'left';
+  ctx.font = `13px ${FONT}`;
+  ctx.fillStyle = '#efe4cc';
+  step.text.forEach((line, i) => ctx.fillText(line, x + 14, 54 + i * 20));
+  // progress pips
+  for (let i = 0; i < t.steps.length; i++) {
+    ctx.fillStyle = i < t.index ? '#b6ff9f' : i === t.index ? '#ffd98a' : 'rgba(255,255,255,0.2)';
+    ctx.fillRect(x + 14 + i * 14, 84, 10, 3);
   }
 }
 

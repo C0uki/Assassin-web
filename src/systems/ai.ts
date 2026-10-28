@@ -204,6 +204,11 @@ export function updateGuard(g: Guard, w: World, dt: number): void {
     physics(g, w, dt);
     return;
   }
+  if (g.passive) {
+    b.vx = 0;
+    physics(g, w, dt);
+    return;
+  }
   g.hurtT = Math.max(0, g.hurtT - dt);
   g.blockT = Math.max(0, g.blockT - dt);
   g.shootCd = Math.max(0, g.shootCd - dt);

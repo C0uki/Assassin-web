@@ -49,6 +49,7 @@ export interface Hideout extends HideoutDef {
 }
 
 export type KillKind = 'assassinate' | 'air' | 'hay' | 'counter' | 'combat' | 'knife';
+export type WorldMode = 'campaign' | 'training';
 
 const STEALTH_KILLS: KillKind[] = ['assassinate', 'air', 'hay'];
 const ACTIVE_RANGE = 1400;
@@ -85,11 +86,15 @@ export class World {
   bannerT = 0;
   victoryT = -1;
   civKillsThisLife = 0;
+  readonly killCounts: Record<KillKind, number> = { assassinate: 0, air: 0, hay: 0, counter: 0, combat: 0, knife: 0 };
+  /** Where the tutorial wants the player to go next. */
+  marker: { x: number; y: number } | null = null;
 
   constructor(
     readonly city: CityDef,
     readonly save: SaveData,
     private storage: StorageLike | null,
+    readonly mode: WorldMode = 'campaign',
   ) {
     this.map = city.map;
     this.playerStats = statsFor(save.docs.length);
@@ -282,6 +287,7 @@ export class World {
       this.save.stats.combatKills++;
       this.noise(g.cx, g.feet, 200, 'clash');
     }
+    this.killCounts[how]++;
     this.hitStop(0.06);
     this.shake(3);
     if (g.targetId) this.onTargetKilled(g.targetId);
@@ -318,10 +324,21 @@ export class World {
 
   onDetected(newEpisode: boolean): void {
     if (newEpisode) this.save.stats.detections++;
+    if (this.mode === 'training') return;
     if (this.reinforceCd <= 0 && this.reinforceT < 0) this.reinforceT = 6;
   }
 
   onPlayerDeath(): void {
+    if (this.mode === 'training') {
+      // Nobody dies in training: get straight back up.
+      const p = this.player;
+      p.hp = this.playerStats.maxHp;
+      p.iframes = 1.5;
+      p.setState(p.body.onGround ? 'ground' : 'air');
+      this.civKillsThisLife = 0;
+      this.message('訓練では倒れない。もう一度！', '#ffb0a0');
+      return;
+    }
     this.save.stats.deaths++;
     this.playerDeadT = 0;
     this.sound('death');
