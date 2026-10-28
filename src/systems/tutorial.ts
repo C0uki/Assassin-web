@@ -178,6 +178,29 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
     },
   },
   {
+    title: '回復',
+    text: ['H で薬を飲む（飲んでいる間は動けない。隠れ家で補充できる）。', '落ちている食べ物は触れるだけで回復する。両方試そう。'],
+    setup: (w, t) => {
+      const p = w.player;
+      p.hp = w.playerStats.maxHp - 6;
+      p.potions = Math.max(1, p.potions);
+      t.baseline = w.healCounts.potion;
+      t.baseline2 = w.healCounts.food;
+      w.dropFood(p.cx + p.facing * 80, p.feet);
+      w.message('負傷した！ 体力を回復しよう', '#ffb0a0');
+    },
+    update: (w, _dt, t) => {
+      const p = w.player;
+      const drank = w.healCounts.potion > t.baseline;
+      const ate = w.healCounts.food > t.baseline2;
+      // Keep both lessons possible whatever order they are done in.
+      if (p.hp >= w.playerStats.maxHp && !(drank && ate)) p.hp = w.playerStats.maxHp - (drank ? 2 : 4);
+      if (!drank && p.potions === 0) p.potions = 1;
+      if (!ate && !w.pickups.some((it) => it.kind === 'food' && it.respawnT === 0)) w.dropFood(p.cx + p.facing * 80, p.feet);
+      return drank && ate;
+    },
+  },
+  {
     title: '煙玉',
     text: ['O で煙玉。煙の中の敵はしばらく動けず、一撃で暗殺できる。', '地上で使ってみよう。'],
     setup: (w) => {
@@ -195,6 +218,7 @@ export class Tutorial {
   /** Seconds since every step was completed, or -1. */
   finishedT = -1;
   baseline = 0;
+  baseline2 = 0;
   timer = 0;
   partner: Guard | null = null;
 

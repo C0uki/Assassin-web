@@ -61,6 +61,16 @@ export interface DocSpawn {
   y: number;
 }
 
+export type PickupKind = 'food' | 'potion';
+
+export interface PickupSpawn {
+  id: string;
+  kind: PickupKind;
+  /** Center of the item. */
+  x: number;
+  y: number;
+}
+
 export interface HideoutDef {
   id: number;
   x: number;
@@ -80,6 +90,7 @@ export interface CityDef {
   targets: TargetDef[];
   civGroups: CivGroupSpawn[];
   docs: DocSpawn[];
+  pickups: PickupSpawn[];
   hideouts: HideoutDef[];
 }
 
@@ -172,6 +183,7 @@ export function buildCity(seed = 1337): CityDef {
     targets: TARGETS,
     civGroups: [],
     docs: [],
+    pickups: [],
     hideouts: [],
   };
 
@@ -385,7 +397,26 @@ export function buildCity(seed = 1337): CityDef {
     }
   });
 
+  placePickups(city, fillers);
   return city;
+}
+
+/** Food along the streets and potions on rooftops. Uses its own RNG so the rest of the city stays put. */
+function placePickups(city: CityDef, fillers: Building[]): void {
+  const rng = new Rng(2024);
+  city.districts.forEach((dist, d) => {
+    const lo = dist.x0 + 10 * TILE;
+    const hi = dist.x1 - 10 * TILE;
+    for (let i = 0; i < 6; i++) {
+      const x = lo + ((i + rng.range(0.2, 0.8)) / 6) * (hi - lo);
+      city.pickups.push({ id: `f${d}_${i}`, kind: 'food', x, y: GROUND_Y - 12 });
+    }
+    const roofs = fillers.filter((b) => b.district === d && !city.docs.some((doc) => doc.x >= b.tx * TILE && doc.x < (b.tx + b.tw) * TILE));
+    for (let i = 0; i < 2 && roofs.length; i++) {
+      const b = roofs.splice(Math.min(roofs.length - 1, Math.floor(((i + 0.5) / 2) * roofs.length)), 1)[0];
+      city.pickups.push({ id: `p${d}_${i}`, kind: 'potion', x: (b.tx + rng.range(1, b.tw - 1)) * TILE, y: b.topTy * TILE - 14 });
+    }
+  });
 }
 
 export const PLAYER_START = { x: 6.5 * TILE, y: GROUND_Y };
@@ -426,6 +457,7 @@ export function buildTrainingGround(): CityDef {
     targets: [],
     civGroups: [],
     docs: [],
+    pickups: [],
     hideouts: [],
   };
   const { addBuilding, addHay, addBeam } = cityHelpers(city, rng);

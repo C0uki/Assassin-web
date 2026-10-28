@@ -12,6 +12,7 @@ export type Action =
   | 'smoke'
   | 'eagle'
   | 'interact'
+  | 'heal'
   | 'pause'
   | 'mute'
   | 'confirm';
@@ -35,6 +36,7 @@ export const KEY_BINDINGS: Record<string, Action[]> = {
   KeyO: ['smoke'],
   KeyE: ['eagle'],
   KeyF: ['interact'],
+  KeyH: ['heal'],
   Escape: ['pause'],
   KeyP: ['pause'],
   KeyM: ['mute'],

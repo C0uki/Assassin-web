@@ -37,6 +37,15 @@ export function drawEagleVision(ctx: CanvasRenderingContext2D, w: World, cam: Ca
     if (d.x < x0 - 400 || d.x > x1 + 400) continue;
     ctx.fillRect(d.x - 5, d.y - 7, 10, 14);
   }
+  // healing items
+  glow(ctx, '#5aff8a', 12);
+  ctx.fillStyle = '#7dffa0';
+  for (const it of w.pickups) {
+    if (it.respawnT > 0 || it.x < x0 || it.x > x1) continue;
+    ctx.beginPath();
+    ctx.arc(it.x, it.y, it.kind === 'potion' ? 6 : 5, 0, Math.PI * 2);
+    ctx.fill();
+  }
   for (const c of w.civilians) {
     if (c.x < x0 || c.x > x1 || !c.alive) continue;
     glow(ctx, '#8090b0', 4);

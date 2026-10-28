@@ -321,6 +321,17 @@ export function bowPose(drawing: boolean): Pose {
   return p;
 }
 
+/** Head tilted back, bottle raised to the mouth. */
+export function drinkPose(t: number): Pose {
+  const p = basePose();
+  p.lean = -0.15;
+  p.shA = 2.5;
+  p.elA = 1.9 + Math.sin(t * 6) * 0.08;
+  p.shB = 0.2;
+  p.elB = 0.5;
+  return p;
+}
+
 export function searchPose(t: number): Pose {
   const p = idlePose(t);
   p.shA = 1.0;

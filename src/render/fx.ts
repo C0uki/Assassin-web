@@ -37,6 +37,11 @@ export class Fx {
       this.add({ x: x + rand(-12, 12), y, vx: rand(-120, 120), vy: rand(-300, -80), life: rand(0.5, 1), color: '#e6c55a', size: rand(3, 6), gravity: 700, kind: 'straw' });
   }
 
+  sparkle(x: number, y: number, n: number): void {
+    for (let i = 0; i < n; i++)
+      this.add({ x: x + rand(-10, 10), y: y + rand(-14, 14), vx: rand(-20, 20), vy: rand(-70, -30), life: rand(0.5, 0.9), color: '#9dffb0', size: rand(2, 3), gravity: 0, kind: 'dot' });
+  }
+
   sparks(x: number, y: number, n: number): void {
     for (let i = 0; i < n; i++)
       this.add({ x, y, vx: rand(-220, 220), vy: rand(-220, 60), life: rand(0.15, 0.35), color: '#ffe9a0', size: rand(1, 2), gravity: 600, kind: 'dot' });
