@@ -35,6 +35,8 @@ export interface FigureStyle {
   scale: number;
   /** Flat silhouette color (eagle vision). */
   flat?: string;
+  /** Cross emblem on the chest. */
+  crest?: string;
 }
 
 const THIGH = 10;
@@ -414,6 +416,11 @@ export function drawFigure(ctx: CanvasRenderingContext2D, x: number, footY: numb
       poly([add(hip, [-4.5, -2]), add(hip, [4.5, -2]), skirtA, skirtB], s.robe);
       // sash
       line([add(hip, [-4, -2.5]), add(hip, [4, -2.5])], 2.4, s.trim);
+      if (s.crest) {
+        const mid: Pt = [(hip[0] + shoulder[0]) / 2, (hip[1] + shoulder[1]) / 2 - 1];
+        line([add(mid, [0, -4]), add(mid, [0, 4])], 1.8, s.crest);
+        line([add(mid, [-3, -1.5]), add(mid, [3, -1.5])], 1.8, s.crest);
+      }
     }
     // head
     ctx.fillStyle = flat ?? (o ? s.outline : s.skin);

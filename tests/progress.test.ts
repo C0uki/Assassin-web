@@ -56,8 +56,8 @@ describe('upgrades and rank', () => {
   });
 
   it('ranks a ghost run above a bloody one', () => {
-    const ghost = { time: 600, detections: 0, assassinations: 12, combatKills: 0, civilianKills: 0, deaths: 0 };
-    const messy = { time: 600, detections: 8, assassinations: 2, combatKills: 20, civilianKills: 2, deaths: 3 };
+    const ghost = { time: 600, detections: 0, assassinations: 12, combatKills: 0, civilianKills: 0, deaths: 0, bossAttempts: 1 };
+    const messy = { time: 600, detections: 8, assassinations: 2, combatKills: 20, civilianKills: 2, deaths: 3, bossAttempts: 4 };
     expect(rankFor(ghost)).toBe('S');
     expect(rankFor(messy)).toBe('C');
   });

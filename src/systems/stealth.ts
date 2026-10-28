@@ -25,6 +25,8 @@ export const VISION: Record<GuardKind, VisionParams> = {
   chaser: { range: 270, halfAngle: (38 * Math.PI) / 180, closeRadius: 0 },
   brute: { range: 240, halfAngle: (34 * Math.PI) / 180, closeRadius: 0 },
   dog: { range: 160, halfAngle: (50 * Math.PI) / 180, closeRadius: 0 },
+  boss: { range: 240, halfAngle: (40 * Math.PI) / 180, closeRadius: 0 },
+  decoy: { range: 240, halfAngle: (40 * Math.PI) / 180, closeRadius: 0 },
 };
 
 /** Is the point within the facing cone (ignores walls)? */

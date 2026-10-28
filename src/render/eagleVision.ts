@@ -1,4 +1,5 @@
 import { Camera, VIEW_H, VIEW_W } from '../core/camera';
+import type { Guard } from '../entities/guard';
 import { TILE } from '../world/tilemap';
 import type { World } from '../world/world';
 import { drawFigure } from './figures';
@@ -8,6 +9,11 @@ const glow = (ctx: CanvasRenderingContext2D, color: string, blur: number): void 
   ctx.shadowColor = color;
   ctx.shadowBlur = blur;
 };
+
+/** Targets and the grand master himself glow gold; his decoys show up as plain enemies. */
+export function eagleGold(g: Guard): boolean {
+  return g.kind === 'target' || g.kind === 'boss';
+}
 
 /** Eagle Vision: darken the world and make people stand out by allegiance. */
 export function drawEagleVision(ctx: CanvasRenderingContext2D, w: World, cam: Camera): void {
@@ -53,7 +59,7 @@ export function drawEagleVision(ctx: CanvasRenderingContext2D, w: World, cam: Ca
   }
   for (const g of w.guards) {
     if (g.cx < x0 || g.cx > x1 || !g.alive) continue;
-    const target = g.kind === 'target';
+    const target = eagleGold(g);
     glow(ctx, target ? '#ffcc33' : '#ff2a1a', target ? 22 : 12);
     drawGuard(ctx, g, target ? '#ffd24a' : '#d02a20');
   }
@@ -69,7 +75,7 @@ export function drawEagleVision(ctx: CanvasRenderingContext2D, w: World, cam: Ca
   glow(ctx, '#ffcc33', 10);
   ctx.fillStyle = '#ffd24a';
   for (const g of w.guards) {
-    if (g.kind !== 'target' || !g.alive) continue;
+    if (!eagleGold(g) || !g.alive) continue;
     const sx = g.cx - cam.x;
     if (sx >= 0 && sx <= VIEW_W) continue;
     const left = sx < 0;

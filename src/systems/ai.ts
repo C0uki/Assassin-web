@@ -13,10 +13,10 @@ import { AWARENESS_DECAY, SUSPICIOUS_AT, VISION, canSeePoint, detectionRate, smo
 
 const PATROL_SPEED = 52;
 const SEARCH_SPEED = 85;
-const CHASE_SPEED: Record<GuardKind, number> = { guard: 165, elite: 150, archer: 120, target: 150, chaser: 230, brute: 95, dog: 240 };
+const CHASE_SPEED: Record<GuardKind, number> = { guard: 165, elite: 150, archer: 120, target: 150, chaser: 230, brute: 95, dog: 240, boss: 140, decoy: 150 };
 const CHASER_JUMP_V = 560;
 /** Damage of a regular / heavy blow. */
-const HIT_DAMAGE: Partial<Record<GuardKind, number>> = { dog: 1, brute: 4 };
+const HIT_DAMAGE: Partial<Record<GuardKind, number>> = { dog: 1, brute: 4, decoy: 1 };
 const SNIFF_RADIUS = 100;
 const SNIFF_TIME = 1.5;
 const REACH = 40;
@@ -241,12 +241,14 @@ export function updateGuard(g: Guard, w: World, dt: number): void {
   g.blockT = Math.max(0, g.blockT - dt);
   g.shootCd = Math.max(0, g.shootCd - dt);
   const p = w.player;
+  // The grand master's scripted moments (intro, phase changes, leaps) override the usual AI.
+  if (g.kind === 'boss' && w.boss?.control(g, dt)) return;
 
   if (g.state !== 'stunned' && w.inSmoke(g.cx, b.y + 20)) {
     w.combat.release(g);
     g.attack.phase = 'none';
     g.climbing = false;
-    g.stunT = 3.5;
+    g.stunT = g.kind === 'boss' ? 2 : 3.5;
     g.setState('stunned');
   }
   if (g.state === 'stunned') {
@@ -425,6 +427,7 @@ function updateSearch(g: Guard, w: World, dt: number): void {
 }
 
 function updateCombat(g: Guard, w: World, dt: number, seen: boolean): void {
+  if (g.kind === 'boss' && w.boss) return w.boss.fight(g, dt, seen);
   const p = w.player;
   const b = g.body;
   if (!seen) {

@@ -9,6 +9,8 @@ export interface Stats {
   combatKills: number;
   civilianKills: number;
   deaths: number;
+  /** Times the player entered the final duel. */
+  bossAttempts: number;
 }
 
 export interface SaveData {
@@ -18,6 +20,8 @@ export interface SaveData {
   hideout: number;
   hideoutsFound: number[];
   stats: Stats;
+  /** The grand master is dead: the story is over. */
+  bossDefeated: boolean;
   complete: boolean;
 }
 
@@ -34,7 +38,8 @@ export function newSave(): SaveData {
     docs: [],
     hideout: 0,
     hideoutsFound: [0],
-    stats: { time: 0, detections: 0, assassinations: 0, combatKills: 0, civilianKills: 0, deaths: 0 },
+    stats: { time: 0, detections: 0, assassinations: 0, combatKills: 0, civilianKills: 0, deaths: 0, bossAttempts: 0 },
+    bossDefeated: false,
     complete: false,
   };
 }
@@ -47,6 +52,8 @@ export function loadSave(storage: StorageLike | null): SaveData | null {
     const data = JSON.parse(raw) as Partial<SaveData>;
     if (data.version !== SAVE_VERSION || !Array.isArray(data.targetsKilled) || !Array.isArray(data.docs)) return null;
     const base = newSave();
+    // Saves from before the final duel counted six targets as the end; let them face the grand master.
+    if (data.bossDefeated === undefined) data.complete = false;
     return { ...base, ...data, stats: { ...base.stats, ...data.stats } } as SaveData;
   } catch {
     return null;

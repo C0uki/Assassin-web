@@ -8,6 +8,7 @@ import { Player } from '../entities/player';
 import { Projectile, makeProjectile } from '../entities/projectile';
 import { Fx } from '../render/fx';
 import { enterCombat, updateGuard } from '../systems/ai';
+import { BossFight } from '../systems/boss';
 import { CombatDirector, guardTakesHit } from '../systems/combat';
 import {
   PlayerStats,
@@ -19,7 +20,7 @@ import {
   writeSave,
 } from '../systems/progress';
 import type { Smoke } from '../systems/stealth';
-import { CityDef, GROUND_Y, HideoutDef, PickupKind, districtAt } from './city';
+import { BOSS, CityDef, GROUND_Y, HideoutDef, PickupKind, districtAt } from './city';
 import { lineOfSight } from './los';
 import { TileMap } from './tilemap';
 
@@ -64,7 +65,7 @@ export interface Hideout extends HideoutDef {
 }
 
 export type KillKind = 'assassinate' | 'air' | 'hay' | 'counter' | 'combat' | 'knife';
-export type WorldMode = 'campaign' | 'training';
+export type WorldMode = 'campaign' | 'training' | 'boss';
 
 const STEALTH_KILLS: KillKind[] = ['assassinate', 'air', 'hay'];
 const ACTIVE_RANGE = 1400;
@@ -109,6 +110,10 @@ export class World {
   random: () => number = Math.random;
   /** Where the tutorial wants the player to go next. */
   marker: { x: number; y: number } | null = null;
+  /** The final duel, in boss mode. */
+  boss: BossFight | null = null;
+  /** The player stepped through the open gate: the scene should load the duel. */
+  enterBossRequested = false;
 
   constructor(
     readonly city: CityDef,
@@ -123,13 +128,32 @@ export class World {
     const s = this.playerStats;
     this.player = new Player(home.x, home.y, s.maxHp, s.maxKnives, s.maxSmokes, s.maxPotions);
     this.spawnEntities();
+    if (mode === 'boss') this.boss = new BossFight(this);
+    if (this.gateOpen) this.marker = { ...this.city.bossGate! };
+  }
+
+  /** All six targets are dead and the grand master still waits behind the gate. */
+  get gateOpen(): boolean {
+    return (
+      this.mode === 'campaign' &&
+      !!this.city.bossGate &&
+      this.city.targets.length > 0 &&
+      this.save.targetsKilled.length >= this.city.targets.length &&
+      !this.save.bossDefeated
+    );
+  }
+
+  nearGate(): boolean {
+    const g = this.city.bossGate;
+    const p = this.player;
+    return !!g && this.gateOpen && Math.abs(p.cx - g.x) < 40 && Math.abs(p.feet - g.y) < 8;
   }
 
   // ---------- setup ----------
 
   respawnPoint(): { x: number; y: number } {
     const h = this.hideouts.find((x) => x.id === this.save.hideout) ?? this.hideouts[0];
-    return h ? { x: h.x + h.w / 2, y: h.y + h.h } : { x: 200, y: GROUND_Y };
+    return h ? { x: h.x + h.w / 2, y: h.y + h.h } : (this.city.start ?? { x: 200, y: GROUND_Y });
   }
 
   spawnEntities(): void {
@@ -317,6 +341,8 @@ export class World {
 
   killGuard(g: Guard, how: KillKind): void {
     if (!g.alive) return;
+    // The grand master survives blows that kill anyone else; decoys turn to smoke.
+    if (this.boss && (g.kind === 'decoy' || (g.kind === 'boss' && !this.boss.finishing))) return this.boss.onKillBlow(g, how);
     const p = this.player;
     this.combat.release(g);
     const wasCombat = g.state === 'combat' || g.state === 'staggered';
@@ -340,6 +366,7 @@ export class World {
     this.hitStop(0.06);
     this.shake(3);
     if (g.targetId) this.onTargetKilled(g.targetId);
+    if (g.kind === 'boss') this.onBossDefeated();
   }
 
   killCivilian(c: Civilian): void {
@@ -364,16 +391,34 @@ export class World {
     if (!this.save.targetsKilled.includes(id)) this.save.targetsKilled.push(id);
     if (t) this.message(`${t.title} ${t.name} を始末した`, '#ffd76a');
     this.sound('target');
-    if (this.save.targetsKilled.length >= this.city.targets.length) {
-      this.save.complete = true;
-      this.victoryT = 0;
+    if (this.gateOpen) {
+      this.message(`${BOSS.title} ${BOSS.name}「よくぞ我が手駒を……東の門の先で待つ」`, '#ffd0a0');
+      this.message('街の東の端に、騎士団の門が開いた', '#ffd76a');
+      this.marker = { ...this.city.bossGate! };
     }
+    this.persist();
+  }
+
+  onBossDefeated(): void {
+    this.save.bossDefeated = true;
+    this.save.complete = true;
+    this.victoryT = 0;
+    this.combat.reset();
+    for (const g of this.guards) {
+      if (!g.alive) continue;
+      g.passive = true;
+      g.attack.phase = 'none';
+      g.setState('patrol');
+    }
+    this.player.iframes = 99;
+    this.message(`${BOSS.title} ${BOSS.name} を討ち果たした`, '#ffd76a');
+    this.sound('target');
     this.persist();
   }
 
   onDetected(newEpisode: boolean): void {
     if (newEpisode) this.save.stats.detections++;
-    if (this.mode === 'training') return;
+    if (this.mode !== 'campaign') return;
     if (this.reinforceCd <= 0 && this.reinforceT < 0) this.reinforceT = 6;
   }
 
@@ -415,11 +460,15 @@ export class World {
 
     const p = this.player;
     p.update(this, input, dt);
+    if (this.nearGate() && !p.dead && input.wasPressed('interact')) this.enterBossRequested = true;
     this.combat.update(dt);
-    for (const g of this.guards) {
+    // The arena is small enough to keep everyone awake.
+    const range = this.mode === 'boss' ? Infinity : ACTIVE_RANGE;
+    for (const g of [...this.guards]) {
       const dx = Math.abs(g.cx - p.cx);
-      if (dx < ACTIVE_RANGE || (g.state === 'combat' && dx < ACTIVE_RANGE * 2)) updateGuard(g, this, dt);
+      if (dx < range || (g.state === 'combat' && dx < range * 2)) updateGuard(g, this, dt);
     }
+    this.boss?.update(dt);
     this.updateCivilians(dt);
     this.updateProjectiles(dt);
     for (const s of this.smokes) s.life -= dt;
@@ -458,7 +507,7 @@ export class World {
       else if (walkers.some((c) => c.x < g.minX)) g.dir = 1;
     }
     for (const c of this.civilians) {
-      if (Math.abs(c.x - px) > ACTIVE_RANGE) continue;
+      if (this.mode !== 'boss' && Math.abs(c.x - px) > ACTIVE_RANGE) continue;
       c.animT += dt;
       const g = c.group;
       switch (c.state) {
@@ -508,7 +557,11 @@ export class World {
           if (pr.x > b.x - 4 && pr.x < b.x + b.w + 4 && pr.y > b.y && pr.y < b.y + b.h) {
             pr.dead = true;
             const dmg = g.kind === 'elite' || g.kind === 'brute' ? 3 : 5;
-            if (g.hp <= dmg) this.killGuard(g, 'knife');
+            if (g.kind === 'boss' && this.boss) {
+              this.fx.blood(g.cx, b.y + 16, sign(pr.vx) || 1, 5);
+              this.sound('hit');
+              this.boss.onKillBlow(g, 'knife');
+            } else if (g.hp <= dmg) this.killGuard(g, 'knife');
             else {
               g.hp -= dmg;
               g.hurtT = 0.2;

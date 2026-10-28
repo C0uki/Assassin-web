@@ -10,9 +10,9 @@ export interface GuardAttack {
   heavy: boolean;
 }
 
-const HP: Record<GuardKind, number> = { guard: 4, elite: 7, archer: 3, target: 5, chaser: 3, brute: 10, dog: 2 };
+const HP: Record<GuardKind, number> = { guard: 4, elite: 7, archer: 3, target: 5, chaser: 3, brute: 10, dog: 2, boss: 45, decoy: 1 };
 
-const SIZE: Partial<Record<GuardKind, [number, number]>> = { elite: [18, 44], brute: [22, 50], dog: [26, 18] };
+const SIZE: Partial<Record<GuardKind, [number, number]>> = { elite: [18, 44], brute: [22, 50], dog: [26, 18], boss: [20, 48], decoy: [20, 48] };
 
 let nextId = 1;
 

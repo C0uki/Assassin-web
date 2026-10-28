@@ -31,8 +31,9 @@ describe('assassination', () => {
     expect(world.save.stats.assassinations).toBe(1);
   });
 
-  it('counts targets and finishes the game when all are dead', () => {
+  it('counts targets and opens the gate to the grand master when all are dead', () => {
     const { world, input } = testWorld();
+    world.city.bossGate = { x: 3000, y: GROUND_Y };
     world.city.targets.push({ id: 'tx', name: 'X', title: 'テスト', desc: '', district: 0 });
     const t = addGuard(world, 'target', 1000, 1);
     Object.assign(t, { targetId: 'tx' });
@@ -40,7 +41,10 @@ describe('assassination', () => {
     input.press('attack');
     run(world, input, 0.6);
     expect(world.save.targetsKilled).toEqual(['tx']);
-    expect(world.save.complete).toBe(true);
+    // Six targets are no longer the end: the gate opens and the marker points at it.
+    expect(world.save.complete).toBe(false);
+    expect(world.gateOpen).toBe(true);
+    expect(world.marker).toEqual({ x: 3000, y: GROUND_Y });
   });
 });
 
