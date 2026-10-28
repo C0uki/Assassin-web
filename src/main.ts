@@ -5,6 +5,7 @@ import { GameScene } from './scenes/game';
 import type { AppContext, Scene } from './scenes/scene';
 import { TitleScene } from './scenes/title';
 import type { StorageLike } from './systems/progress';
+import { loadSettings, writeSettings } from './systems/settings';
 
 const STEP = 1 / 60;
 
@@ -42,14 +43,21 @@ const audio = new AudioSystem();
 input.onFirstInput = () => audio.init();
 
 let scene: Scene;
+const storage = safeStorage();
 const app: AppContext = {
   input,
   audio,
-  storage: safeStorage(),
+  storage,
+  settings: loadSettings(storage),
+  saveSettings() {
+    writeSettings(storage, app.settings);
+    audio.setVolumes(app.settings);
+  },
   go(next) {
     scene = next;
   },
 };
+audio.setVolumes(app.settings);
 scene = new TitleScene(app);
 
 if (import.meta.env.DEV || location.search.includes('debug')) {
@@ -59,6 +67,9 @@ if (import.meta.env.DEV || location.search.includes('debug')) {
     },
     get world() {
       return scene instanceof GameScene ? scene.world : null;
+    },
+    get tutorial() {
+      return scene instanceof GameScene ? scene.tutorial : null;
     },
     input,
   };

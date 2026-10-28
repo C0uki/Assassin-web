@@ -111,24 +111,17 @@ export function districtAt(x: number): number {
 
 const roofY = (topTy: number): number => topTy * TILE;
 
-export function buildCity(seed = 1337): CityDef {
-  const rng = new Rng(seed);
-  const map = new TileMap(WORLD_TW, WORLD_TH);
-  map.fill(0, GROUND_ROW, WORLD_TW, WORLD_TH - GROUND_ROW, Tile.Solid);
+export interface CityHelpers {
+  addBuilding(tx: number, tw: number, h: number, kind: BuildingKind, district: number): Building;
+  addHay(tx: number, tw?: number): void;
+  addBeam(tx: number, ty: number, tw: number): void;
+  guard(kind: GuardKind, x: number, y: number, range: [number, number], district: number, facing?: 1 | -1, targetId?: string): void;
+  onRoof(b: Building): { y: number; range: [number, number]; cx: number };
+}
 
-  const city: CityDef = {
-    map,
-    buildings: [],
-    beams: [],
-    hays: [],
-    districts: DISTRICTS,
-    guards: [],
-    targets: TARGETS,
-    civGroups: [],
-    docs: [],
-    hideouts: [],
-  };
-
+/** Shared building blocks for authoring maps. */
+export function cityHelpers(city: CityDef, rng: Rng): CityHelpers {
+  const map = city.map;
   const addBuilding = (tx: number, tw: number, h: number, kind: BuildingKind, district: number): Building => {
     const b: Building = { tx, tw, topTy: GROUND_ROW - h, district, kind, variant: rng.int(0, 3) };
     map.fill(tx, b.topTy + 1, tw, h - 1, Tile.Facade);
@@ -160,6 +153,29 @@ export function buildCity(seed = 1337): CityDef {
     range: [(b.tx + 0.5) * TILE, (b.tx + b.tw - 1.5) * TILE],
     cx: (b.tx + b.tw / 2) * TILE,
   });
+
+  return { addBuilding, addHay, addBeam, guard, onRoof };
+}
+
+export function buildCity(seed = 1337): CityDef {
+  const rng = new Rng(seed);
+  const map = new TileMap(WORLD_TW, WORLD_TH);
+  map.fill(0, GROUND_ROW, WORLD_TW, WORLD_TH - GROUND_ROW, Tile.Solid);
+
+  const city: CityDef = {
+    map,
+    buildings: [],
+    beams: [],
+    hays: [],
+    districts: DISTRICTS,
+    guards: [],
+    targets: TARGETS,
+    civGroups: [],
+    docs: [],
+    hideouts: [],
+  };
+
+  const { addBuilding, addHay, addBeam, guard, onRoof } = cityHelpers(city, rng);
 
   // ---- Authored landmarks (reserved spans) ----
   type Landmark = { tx: number; tw: number; build: () => void };
@@ -373,3 +389,58 @@ export function buildCity(seed = 1337): CityDef {
 }
 
 export const PLAYER_START = { x: 6.5 * TILE, y: GROUND_Y };
+
+export const TRAINING_TW = 130;
+
+/** Tile x of each training station, left to right. */
+export const TRAINING = {
+  start: 3,
+  walkTo: 16,
+  runTo: 29,
+  climb: { tx: 31, tw: 6, h: 6 },
+  hop1: { tx: 39, tw: 6, h: 6 },
+  hop2: { tx: 48, tw: 5, h: 7 },
+  tower: { tx: 55, tw: 3, h: 14 },
+  hay: { tx: 59, tw: 3 },
+  backKill: 72,
+  airPerch: { tx: 78, tw: 3, h: 5 },
+  airBeam: { tx: 81, tw: 7 },
+  airKill: 85,
+  crowd: { x0: 92, x1: 101 },
+  spar: 110,
+  knifeRoof: { tx: 121, tw: 5, h: 4 },
+} as const;
+
+/** A short, safe level that teaches one move at a time. */
+export function buildTrainingGround(): CityDef {
+  const rng = new Rng(7);
+  const map = new TileMap(TRAINING_TW, WORLD_TH);
+  map.fill(0, GROUND_ROW, TRAINING_TW, WORLD_TH - GROUND_ROW, Tile.Solid);
+  const city: CityDef = {
+    map,
+    buildings: [],
+    beams: [],
+    hays: [],
+    districts: [{ name: '教団の訓練場', sub: '修練', x0: 0, x1: TRAINING_TW * TILE }],
+    guards: [],
+    targets: [],
+    civGroups: [],
+    docs: [],
+    hideouts: [],
+  };
+  const { addBuilding, addHay, addBeam } = cityHelpers(city, rng);
+  const T = TRAINING;
+
+  addBuilding(0, 6, 5, 'hideout', 0);
+  city.hideouts.push({ id: 0, x: T.start * TILE, y: GROUND_Y - 64, w: 64, h: 64, district: 0 });
+  addBuilding(T.climb.tx, T.climb.tw, T.climb.h, 'house', 0);
+  addBuilding(T.hop1.tx, T.hop1.tw, T.hop1.h, 'house', 0);
+  addBuilding(T.hop2.tx, T.hop2.tw, T.hop2.h, 'house', 0);
+  addBuilding(T.tower.tx, T.tower.tw, T.tower.h, 'tower', 0);
+  addHay(T.hay.tx, T.hay.tw);
+  addBuilding(T.airPerch.tx, T.airPerch.tw, T.airPerch.h, 'house', 0);
+  addBeam(T.airBeam.tx, GROUND_ROW - T.airPerch.h, T.airBeam.tw);
+  addBuilding(T.knifeRoof.tx, T.knifeRoof.tw, T.knifeRoof.h, 'warehouse', 0);
+  city.civGroups.push({ x: (T.crowd.x0 + 2) * TILE, count: 5, minX: T.crowd.x0 * TILE, maxX: T.crowd.x1 * TILE, district: 0 });
+  return city;
+}
