@@ -1,11 +1,11 @@
 import type { Input } from '../core/input';
 import { approach, clamp, overlaps, sign } from '../core/math';
-import { Body, applyGravity, bodyBottom, hasFloorAt, makeBody, moveBody } from '../systems/physics';
+import { Body, GRAVITY, MAX_FALL, applyGravity, bodyBottom, hasFloorAt, makeBody, moveBody } from '../systems/physics';
 import { TILE, Tile } from '../world/tilemap';
 import type { World } from '../world/world';
 import type { Guard } from './guard';
 import { BLEND_COUNT, BLEND_RADIUS, countNearby } from '../systems/stealth';
-import { canGrab, findMantleRow, handsY } from '../systems/parkour';
+import { canGrab, findMantleRow, handsY, predictLanding } from '../systems/parkour';
 
 export type PlayerState =
   | 'ground'
@@ -38,7 +38,9 @@ const JUMP_BUFFER = 0.12;
 export const PARRY_WINDOW = 0.18;
 const DODGE_TIME = 0.32;
 const DODGE_IFRAMES = 0.26;
-export const SAFE_FALL_SPEED = 980;
+export const SAFE_FALL_SPEED = 1060;
+export const MAX_FALL_DAMAGE = 4;
+export const ROLL_WINDOW = 0.25;
 export const DRINK_TIME = 0.6;
 export const POTION_HEAL = 4;
 
@@ -85,6 +87,8 @@ export class Player {
   diving = false;
   inHideout = false;
   civBumpT = 0;
+  /** Breakfall input: L pressed shortly before touching down. */
+  rollBuffer = 0;
 
   constructor(x: number, feetY: number, maxHp: number, knives: number, smokes: number, potions: number) {
     this.body = makeBody(x - 8, feetY - 40, 16, 40);
@@ -130,6 +134,7 @@ export class Player {
     this.grabLock = Math.max(0, this.grabLock - dt);
     this.dodgeCd = Math.max(0, this.dodgeCd - dt);
     this.civBumpT = Math.max(0, this.civBumpT - dt);
+    this.rollBuffer = Math.max(0, this.rollBuffer - dt);
     this.jumpBuffer = input.wasPressed('jump') ? JUMP_BUFFER : Math.max(0, this.jumpBuffer - dt);
     this.freerun = input.isHeld('sprint');
     this.blended = false;
@@ -206,12 +211,19 @@ export class Player {
         if (this.freerun && Math.abs(b.vx) > WALK + 20) this.bumpCivilians(w);
       }
 
-      // Freerun leaps off roof edges automatically.
+      // Freerun leaps off roof edges automatically, but only when the leap lands somewhere safe.
       if (this.freerun && ax !== 0 && !hasFloorAt(w.map, this.cx + ax * (b.w / 2 + 6), this.feet)) {
-        this.jump(w, FREERUN_JUMP_V);
-        return this.physics(w, dt);
+        if (this.safeLeap(w, ax)) {
+          this.jump(w, FREERUN_JUMP_V);
+          return this.physics(w, dt);
+        }
+        if (this.jumpBuffer <= 0) {
+          b.vx = 0;
+          return this.physics(w, dt);
+        }
       }
     } else {
+      if (input.wasPressed('dodge')) this.rollBuffer = ROLL_WINDOW;
       const maxAir = Math.max(this.freerun ? RUN : WALK, Math.abs(b.vx));
       b.vx = approach(b.vx, ax * maxAir, ACC_AIR * dt);
       this.coyote = Math.max(0, this.coyote - dt);
@@ -277,6 +289,12 @@ export class Player {
     this.physics(w, dt);
   }
 
+  /** Would an automatic freerun leap in direction `dir` end on a floor, hay or a wall to grab? */
+  safeLeap(w: World, dir: number): boolean {
+    const res = predictLanding(w.map, this.cx, this.feet, dir * RUN, -FREERUN_JUMP_V, { gravity: GRAVITY, maxFall: MAX_FALL });
+    return res.kind === 'hay' || res.kind === 'grab' || (res.kind === 'floor' && res.vy <= SAFE_FALL_SPEED);
+  }
+
   private jump(w: World, v: number): void {
     this.body.vy = -v;
     this.jumpBuffer = 0;
@@ -312,9 +330,22 @@ export class Player {
 
   private onLand(w: World, vy: number): void {
     this.diving = false;
+    if (this.rollBuffer > 0 && vy > 300 && this.state !== 'dead') {
+      // Breakfall: no damage, roll forward keeping momentum.
+      this.rollBuffer = 0;
+      w.fx.dust(this.cx, this.feet, 8);
+      w.sound('land');
+      w.noise(this.cx, this.feet, 70, 'land');
+      if (vy > SAFE_FALL_SPEED) w.message('受け身！', '#e8d9a8');
+      this.body.vx = this.facing * Math.max(Math.abs(this.body.vx), 220);
+      this.dodgeCd = 0.45;
+      this.setState('dodge');
+      w.breakfalls++;
+      return;
+    }
     if (vy > 500) w.fx.dust(this.cx, this.feet, 6);
     if (vy > SAFE_FALL_SPEED && this.state !== 'dead') {
-      const dmg = Math.min(6, Math.ceil((vy - SAFE_FALL_SPEED) / 20));
+      const dmg = Math.min(MAX_FALL_DAMAGE, Math.ceil((vy - SAFE_FALL_SPEED) / 10));
       w.noise(this.cx, this.feet, 200, 'land');
       w.sound('thud');
       this.damage(w, dmg, this.cx, false);

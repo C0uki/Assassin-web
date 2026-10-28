@@ -52,6 +52,7 @@ export function guardBlocks(g: Guard, fromX: number, comboStep: number, roll: nu
   if (sign(fromX - g.cx) !== g.facing) return false;
   if (comboStep >= 2) return false;
   if (g.kind === 'elite') return roll < 0.6;
+  if (g.kind === 'brute') return roll < 0.5;
   if (g.kind === 'target') return roll < 0.3;
   return false;
 }
@@ -76,8 +77,9 @@ export function guardTakesHit(w: World, g: Guard, dmg: number, comboStep: number
     return 'killed';
   }
   w.alertGuard(g);
-  g.body.vx = (sign(g.cx - fromX) || 1) * (comboStep >= 2 ? 220 : 80);
-  if (comboStep >= 2) staggerGuard(w, g, 0.5, false);
+  g.body.vx = g.kind === 'brute' ? 0 : (sign(g.cx - fromX) || 1) * (comboStep >= 2 ? 220 : 80);
+  // Brutes shrug off even the finishing blow.
+  if (comboStep >= 2 && g.kind !== 'brute') staggerGuard(w, g, 0.5, false);
   else if (g.attack.phase === 'windup' && g.kind === 'guard') {
     w.combat.release(g);
     g.attack.phase = 'none';

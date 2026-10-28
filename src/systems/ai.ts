@@ -2,18 +2,23 @@ import { approach, dist, sign } from '../core/math';
 import type { Guard } from '../entities/guard';
 import type { Corpse } from '../entities/corpse';
 import { WALK } from '../entities/player';
-import { GROUND_Y } from '../world/city';
+import { GROUND_Y, GuardKind } from '../world/city';
 import { lineOfSight } from '../world/los';
 import { TILE } from '../world/tilemap';
 import type { Noise, World } from '../world/world';
 import { staggerGuard } from './combat';
-import { canGrab, edgeAhead, findMantleRow, handsY } from './parkour';
-import { applyGravity, moveBody } from './physics';
+import { canGrab, edgeAhead, findMantleRow, handsY, predictLanding } from './parkour';
+import { GRAVITY, MAX_FALL, applyGravity, moveBody } from './physics';
 import { AWARENESS_DECAY, SUSPICIOUS_AT, VISION, canSeePoint, detectionRate, smokeBlocks } from './stealth';
 
 const PATROL_SPEED = 52;
 const SEARCH_SPEED = 85;
-const CHASE_SPEED = { guard: 165, elite: 150, archer: 120, target: 150 } as const;
+const CHASE_SPEED: Record<GuardKind, number> = { guard: 165, elite: 150, archer: 120, target: 150, chaser: 230, brute: 95, dog: 240 };
+const CHASER_JUMP_V = 560;
+/** Damage of a regular / heavy blow. */
+const HIT_DAMAGE: Partial<Record<GuardKind, number>> = { dog: 1, brute: 4 };
+const SNIFF_RADIUS = 100;
+const SNIFF_TIME = 1.5;
 const REACH = 40;
 const LOST_TIMEOUT = 3.5;
 
@@ -62,8 +67,10 @@ function hearNoise(g: Guard, w: World, n: Noise): void {
       return;
     case 'alarm':
     case 'scream':
+    case 'bark':
       g.setState('search');
-      g.lastKnown = { x: n.x, y: n.y };
+      // A bark points at whatever the hound smelled: the player's spot.
+      g.lastKnown = n.kind === 'bark' ? { x: w.player.cx, y: w.player.feet } : { x: n.x, y: n.y };
       g.awareness = Math.max(g.awareness, 0.6);
       return;
     default:
@@ -83,7 +90,7 @@ function discoverCorpse(g: Guard, w: World, c: Corpse): void {
   g.awareness = Math.max(g.awareness, 0.7);
   w.noise(g.cx, g.body.y, 300, 'alarm');
   w.raiseAlert(g.district);
-  w.sound('alarm');
+  w.sound(g.kind === 'dog' ? 'bark' : 'alarm');
   w.message('死体が発見された！警戒が強まる', '#e0a060');
 }
 
@@ -115,7 +122,14 @@ export function navigateTo(g: Guard, w: World, tx: number, ty: number, speed: nu
     }
     g.climbing = false;
   }
-  if (dy < -48 && Math.abs(dx) < 24 && b.onGround && canGrab(map, g.cx, b.y)) {
+  // Chasers catch walls in mid-air, like the player does.
+  if (g.kind === 'chaser' && !b.onGround && b.vy > -150 && dy < -8 && canGrab(map, g.cx, b.y)) {
+    g.climbing = true;
+    b.vx = 0;
+    b.vy = 0;
+    return 'moving';
+  }
+  if (g.canClimb && dy < -48 && Math.abs(dx) < 24 && b.onGround && canGrab(map, g.cx, b.y)) {
     g.climbing = true;
     b.vx = 0;
     return 'moving';
@@ -127,11 +141,23 @@ export function navigateTo(g: Guard, w: World, tx: number, ty: number, speed: nu
   const dir = sign(dx) as 1 | -1;
   g.facing = dir;
   if (b.onGround && edgeAhead(map, g.cx, g.feet, dir, b.w / 2) && !(dy > 40)) {
+    if (g.kind === 'chaser' && speed > SEARCH_SPEED && chaserCanLeap(g, w, dir)) {
+      b.vx = dir * speed;
+      b.vy = -CHASER_JUMP_V;
+      w.sound('jump');
+      return 'moving';
+    }
     b.vx = 0;
     return 'blocked';
   }
   b.vx = dir * speed;
   return 'moving';
+}
+
+/** Chasers jump roof gaps when the jump ends on a roof or a wall they can grab. */
+function chaserCanLeap(g: Guard, w: World, dir: number): boolean {
+  const res = predictLanding(w.map, g.cx, g.feet, dir * CHASE_SPEED.chaser, -CHASER_JUMP_V, { gravity: GRAVITY, maxFall: MAX_FALL });
+  return res.kind === 'grab' || (res.kind === 'floor' && res.vy < 900);
 }
 
 function physics(g: Guard, w: World, dt: number): void {
@@ -141,9 +167,10 @@ function physics(g: Guard, w: World, dt: number): void {
 }
 
 function startAttack(g: Guard, w: World): void {
-  g.attack.heavy = (g.kind === 'elite' || g.kind === 'target') && Math.random() < 0.35;
+  g.attack.heavy = g.kind === 'brute' || ((g.kind === 'elite' || g.kind === 'target') && Math.random() < 0.35);
   g.attack.phase = 'windup';
-  g.attack.t = g.attack.heavy ? 0.75 : 0.5;
+  g.attack.t = g.kind === 'dog' ? 0.3 : g.kind === 'brute' ? 1.0 : g.attack.heavy ? 0.75 : 0.5;
+  if (g.kind === 'dog') return w.sound('growl');
   w.sound(g.attack.heavy ? 'windupHeavy' : 'windup');
 }
 
@@ -157,11 +184,12 @@ function updateAttack(g: Guard, w: World, dt: number): void {
     a.phase = 'active';
     a.t = 0.12;
     g.body.vx = g.facing * 90;
-    w.sound('swingEnemy');
+    w.sound(g.kind === 'dog' ? 'bite' : 'swingEnemy');
     w.noise(g.cx, g.feet, 260, 'clash');
-    const fx = g.cx + g.facing * 20;
-    if (Math.abs(p.cx - fx) < 28 && Math.abs(p.feet - g.feet) < 30) {
-      const res = p.receiveHit(w, g.cx, a.heavy ? 3 : 2, { unblockable: a.heavy });
+    const fx = g.cx + g.facing * (g.body.w / 2 + 12);
+    if (Math.abs(p.cx - fx) < (g.kind === 'brute' ? 34 : 28) && Math.abs(p.feet - g.feet) < 30) {
+      const dmg = HIT_DAMAGE[g.kind] ?? (a.heavy ? 3 : 2);
+      const res = p.receiveHit(w, g.cx, dmg, { unblockable: a.heavy });
       if (res === 'parry') {
         staggerGuard(w, g, 1.1, true);
         w.sound('parry');
@@ -277,6 +305,7 @@ export function updateGuard(g: Guard, w: World, dt: number): void {
       w.sound('huh');
     }
   }
+  if (g.kind === 'dog') sniff(g, w, dt);
 
   switch (g.state) {
     case 'patrol':
@@ -301,8 +330,47 @@ export function updateGuard(g: Guard, w: World, dt: number): void {
   physics(g, w, dt);
 }
 
+/** Hounds smell a player hiding in hay or a crowd and bark to bring the guards over. */
+function sniff(g: Guard, w: World, dt: number): void {
+  g.barkCd = Math.max(0, g.barkCd - dt);
+  const p = w.player;
+  const near = (p.hidden || p.blended) && Math.hypot(p.cx - g.cx, p.feet - g.feet) < SNIFF_RADIUS;
+  if (!near || g.state === 'combat' || g.barkCd > 0) {
+    g.sniffT = Math.max(0, g.sniffT - dt);
+    return;
+  }
+  g.sniffT += dt;
+  g.facing = p.cx >= g.cx ? 1 : -1;
+  g.body.vx = 0;
+  if (g.sniffT < SNIFF_TIME) return;
+  g.sniffT = 0;
+  g.barkCd = 4;
+  w.noise(g.cx, g.feet, 320, 'bark');
+  w.sound('bark');
+  w.message('番犬に嗅ぎつけられた！', '#ffb070');
+  g.setState('search');
+  g.lastKnown = { x: p.cx, y: p.feet };
+}
+
+/** Hounds trot at their handler's heels while all is quiet. */
+function followHandler(g: Guard, w: World, dt: number): boolean {
+  const h = g.handler;
+  if (!h || !h.alive) return false;
+  const tx = h.cx - h.facing * 30;
+  if (Math.abs(tx - g.cx) > 10) navigateTo(g, w, tx, h.feet, Math.max(PATROL_SPEED + 30, Math.abs(h.body.vx) + 20), dt);
+  else {
+    g.body.vx = 0;
+    g.facing = h.facing;
+  }
+  return true;
+}
+
 function updatePatrol(g: Guard, w: World, dt: number): void {
   const b = g.body;
+  if (g.kind === 'dog') {
+    if (g.sniffT > 0) return;
+    if (followHandler(g, w, dt)) return;
+  }
   if (g.minX === g.maxX) {
     if (Math.abs(g.cx - g.minX) > 8 || Math.abs(g.feet - g.homeY) > 40) navigateTo(g, w, g.minX, g.homeY, PATROL_SPEED, dt);
     else {
@@ -332,6 +400,15 @@ function updatePatrol(g: Guard, w: World, dt: number): void {
 function updateSearch(g: Guard, w: World, dt: number): void {
   if (g.lastKnown) {
     const res = navigateTo(g, w, g.lastKnown.x, g.lastKnown.y, SEARCH_SPEED, dt);
+    const p = w.player;
+    // Checking the hay where someone was seen (or sniffed out) finds whoever hides in it.
+    if (p.hidden && g.kind !== 'dog' && Math.abs(p.cx - g.cx) < 40 && Math.abs(p.feet - g.feet) < 20 && Math.abs(g.lastKnown.x - p.cx) < 60) {
+      p.setState('ground');
+      w.fx.straw(p.cx, p.feet - 10, 14);
+      w.message('干し草から引きずり出された！', '#ff9a7a');
+      enterCombat(g, w, true);
+      return;
+    }
     if (res !== 'moving' || g.stateT > 9) {
       g.lastKnown = null;
       g.lookT = 0;

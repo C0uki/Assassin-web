@@ -1,4 +1,5 @@
 import { pointSegmentDistance } from '../core/math';
+import type { GuardKind } from '../world/city';
 import { lineOfSight } from '../world/los';
 import { TileMap } from '../world/tilemap';
 
@@ -16,11 +17,14 @@ export interface VisionParams {
   closeRadius: number;
 }
 
-export const VISION: Record<'guard' | 'elite' | 'archer' | 'target', VisionParams> = {
+export const VISION: Record<GuardKind, VisionParams> = {
   guard: { range: 260, halfAngle: (36 * Math.PI) / 180, closeRadius: 0 },
   elite: { range: 300, halfAngle: (40 * Math.PI) / 180, closeRadius: 0 },
   archer: { range: 380, halfAngle: (55 * Math.PI) / 180, closeRadius: 0 },
   target: { range: 230, halfAngle: (36 * Math.PI) / 180, closeRadius: 0 },
+  chaser: { range: 270, halfAngle: (38 * Math.PI) / 180, closeRadius: 0 },
+  brute: { range: 240, halfAngle: (34 * Math.PI) / 180, closeRadius: 0 },
+  dog: { range: 160, halfAngle: (50 * Math.PI) / 180, closeRadius: 0 },
 };
 
 /** Is the point within the facing cone (ignores walls)? */

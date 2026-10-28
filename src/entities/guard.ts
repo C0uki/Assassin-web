@@ -10,7 +10,9 @@ export interface GuardAttack {
   heavy: boolean;
 }
 
-const HP: Record<GuardKind, number> = { guard: 4, elite: 7, archer: 3, target: 5 };
+const HP: Record<GuardKind, number> = { guard: 4, elite: 7, archer: 3, target: 5, chaser: 3, brute: 10, dog: 2 };
+
+const SIZE: Partial<Record<GuardKind, [number, number]>> = { elite: [18, 44], brute: [22, 50], dog: [26, 18] };
 
 let nextId = 1;
 
@@ -47,6 +49,12 @@ export class Guard {
   reinforcement = false;
   /** Training dummy: stands still and never notices anything. */
   passive = false;
+  /** Handler ↔ hound link. */
+  dog: Guard | null = null;
+  handler: Guard | null = null;
+  /** Seconds a hound has been sniffing at a hidden player. */
+  sniffT = 0;
+  barkCd = 0;
   readonly district: number;
   readonly targetId?: string;
 
@@ -54,8 +62,7 @@ export class Guard {
     readonly kind: GuardKind,
     spawn: Pick<GuardSpawn, 'x' | 'y' | 'minX' | 'maxX' | 'facing' | 'district' | 'targetId'>,
   ) {
-    const w = kind === 'elite' ? 18 : 16;
-    const h = kind === 'elite' ? 44 : 40;
+    const [w, h] = SIZE[kind] ?? [16, 40];
     this.body = makeBody(spawn.x - w / 2, spawn.y - h, w, h);
     this.facing = spawn.facing;
     this.minX = spawn.minX;
@@ -72,6 +79,11 @@ export class Guard {
 
   get feet(): number {
     return this.body.y + this.body.h;
+  }
+
+  /** Can climb facades. Hounds and heavy brutes cannot. */
+  get canClimb(): boolean {
+    return this.kind !== 'dog' && this.kind !== 'brute';
   }
 
   get alive(): boolean {
